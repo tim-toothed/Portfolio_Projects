@@ -1,0 +1,1470 @@
+---
+title: "Cohort Analysis for the Social Good"
+author: "Sharifullin Timur"
+date: "2023-03-29"
+output: 
+  html_document:
+    code_folding: hide
+    theme: cosmo
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(cohorts)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library("openxlsx")
+library(lubridate)
+library(dplyr)
+library(plotly)
+library(DT)
+
+knitr::opts_chunk$set(message= F, warning=F)
+
+recurrent = read.xlsx("Данные для анализа UPD.xlsx", sheet = 1, startRow = 1, colNames = TRUE)
+transactions = read.xlsx("Данные для анализа UPD.xlsx", sheet = 2, startRow = 1, colNames = TRUE) 
+```
+
+# What is this project about?
+
+<center>
+![](C:/Users/timur/OneDrive/Documents/R Studio Tasks/CV/charity.jpg)
+
+</center>
+
+***THIS PROJECT IS BASED ON REAL-WORLD ORGANISATION DATA. THE DATA HAS BEEN ANONYMIZED. DATA IS PROHIBITED TO BE PUBLICLY ACCESSED DUE TO ETHICAL REASONS***
+
+Charity non-profit organisation provided access to data on remittances to their accounts - donations - and gave several objectives, including they wanted to see a detailed cohort analysis relating to donations from beneficiaries. This paper describes and compares the dynamics of organisation's beneficiaries. Donors of 2016-2022 are divided by the month of the first payment, the dynamics of each cohort is tracked during the period of one year, then the results of different years are compared. In this way it was possible to find both regularities in certain months and multi-year dynamics of funds receipt.
+
+***This work is translated from Russian, because the original version of the project was created for a Russian-speaking company, the code may still contain Russian language due to the structure of the original dataset.***
+
+The analysis is very extensive and mostly repetitive as it includes over 6 years of transactions data, so please use the navigation by page. 
+
+# Preprocessing
+
+```{r}
+# recurrent preprocessing
+
+recurrent$Статус = as.factor(recurrent$Статус) # status
+recurrent$Валюта = as.factor(recurrent$Валюта) # currency
+recurrent$Периодичность = as.factor(recurrent$Периодичность) # periodicity
+recurrent$Описание = as.factor(recurrent$Описание) # description
+
+recurrent$Сумма = as.numeric(recurrent$Сумма) # amount of donation
+
+recurrent$ID.плательщика = as.character(recurrent$ID.плательщика) # Customer ID
+
+recurrent[,2] = as.POSIXct(recurrent[,2] * (60*60*24),
+                           origin="1899-12-30",
+                           tz="GMT") %>% ymd_hms() %>% as.Date(format = "%m/%d/%Y")
+
+recurrent[,9] = as.POSIXct(recurrent[,9] * (60*60*24),
+                           origin="1899-12-30",
+                           tz="GMT") %>% ymd_hms() %>% as.Date(format = "%m/%d/%Y")
+
+recurrent[,10] = as.POSIXct(recurrent[,10] * (60*60*24),
+                           origin="1899-12-30",
+                           tz="GMT") %>% ymd_hms() %>% as.Date(format = "%m/%d/%Y")
+
+# transactions preprocessing
+
+transactions$Платежная.система = as.factor(transactions$Платежная.система) #payment system
+transactions$Эмитент = as.factor(transactions$Эмитент) # issuer
+transactions$Страна.эмитента.карты = as.factor(transactions$Страна.эмитента.карты) # country of issuer
+transactions$Валюта = as.factor(transactions$Валюта) # currency
+transactions$Тип = as.factor(transactions$Тип) # type
+transactions$Сайт = as.factor(transactions$Сайт) # website
+transactions$Страна = as.factor(transactions$Страна) # country
+transactions$Город = as.factor(transactions$Город) # city
+transactions$Назначение = as.factor(transactions$Назначение) #  purpose
+transactions$Статус = as.factor(transactions$Статус) # status
+transactions$Примечание = as.factor(transactions$Примечание) # note
+transactions$Способ.оплаты = as.factor(transactions$Способ.оплаты) # payment method
+
+transactions$ID.плательщика = as.character(transactions$ID.плательщика) # Customer ID
+transactions$Номер = as.character(transactions$Номер) # Number
+
+transactions[,2] = as.POSIXct(transactions[,2] * (60*60*24),
+                           origin="1899-12-30",
+                           tz="GMT") %>% ymd_hms() %>% as.Date(format = "%m/%d/%Y")
+
+transactions[,3] = as.POSIXct(transactions[,3] * (60*60*24),
+                           origin="1899-12-30",
+                           tz="GMT") %>% ymd_hms() %>% as.Date(format = "%m/%d/%Y")
+```
+
+# Cohort Analysis
+
+## Transforming the initial dataset 
+
+```{r}
+cohorts_full = data.frame(CustomerID = transactions$ID.плательщика, 
+                        InvoiceDate = as.Date(transactions$`Дата/время`, format = "%m/%d/%Y"), # date/time
+                        Year = as.numeric(format(transactions$`Дата/время`, '%Y')), # date/time
+                        status = transactions$Статус, # status
+                        type = transactions$Тип) %>% # type
+  filter(status=="Завершена") %>% # "completed"
+  filter(type!="Возврат") %>% # "Returned"
+  dplyr::select(-status,-type)
+
+cohorts_full = cohorts_full %>% na.omit()
+head(cohorts_full)
+```
+
+The data is filtered by the success of completed transactions (status = "Завершена" ("Completed")). Rejected transactions, as well as transactions of the "Возврат" ("Returned") type, will not be taken into account when performing cohort analysis.
+
+Some donators do not have a CustomerID; in total for all years there are 100 missing values.
+
+After preprocessing, the table contains 257,460 observations out of 437,931 observations in the initial table.
+
+```{r}
+# getting the first transaction dates for each customer
+join.date = aggregate(InvoiceDate~CustomerID,cohorts_full, min, na.rm = TRUE)
+
+# changing the name of the column InvoiceDate to Join_Date
+colnames(join.date)[2] = "Join_Date"
+
+# merge the Join date data to the cohort_full data frame
+cohorts_full = merge(cohorts_full, join.date, by.x = "CustomerID", by.y = "CustomerID", all.x = TRUE)
+
+# creating the groups/Cohorts based on the join date year and month
+cohorts_full$Cohort = as.factor(format(cohorts_full$Join_Date, "%Y-%m"))
+
+rm(join.date)
+
+head(cohorts_full)
+```
+
+
+```{r}
+# Function for month difference
+
+# turn a date into a 'monthnumber' relative to an origin
+monnb = function(d) {lt <- as.POSIXlt(as.Date(d, origin="1900-01-01")); lt$year*12 + lt$mon } 
+# compute a month difference as a difference between two monnb's
+mondf = function(d1, d2) { monnb(d2) - monnb(d1) }
+```
+
+
+```{r}
+# Calculating the difference in days between the invoice date column by join date column
+cohorts_full$Age_by_Day = as.numeric(
+  difftime(cohorts_full$InvoiceDate,
+           cohorts_full$Join_Date,
+           units = c("days")
+           )
+  )
+
+# Calculating the difference in months between the invoice date column by join date column
+cohorts_full$Age_by_Month = mondf(cohorts_full$Join_Date, cohorts_full$InvoiceDate)
+
+# Dumping the day element from the join date column
+cohorts_full$Join_Date = format(cohorts_full$Join_Date, "%Y-%m")
+
+# Now we remove the day element from the InvoiceDate data since
+# this Cohort Analysis is based on monthly activity.
+cohorts_full$InvoiceDate = format(cohorts_full$InvoiceDate, "%Y-%m")
+
+
+DT::datatable(head(cohorts_full,500),
+              filter = 'top',
+              rownames = FALSE,
+              options = list(
+                pageLength = 10,
+                pageLength = c(10,20,30,40,50)))
+```
+
+
+*InvoiceDate* - the date of the transaction.
+
+*Join_Date* - the date of the first transaction by a particular user.
+
+*Age_by_Day* - the difference in days between the first transaction and this transaction. If Age_by_Day = 0, this transaction is the first transaction (or the transaction was performed on the same day as the first transaction).
+
+*Age_by_Month* - the difference in months between the first transaction and this transaction.
+
+
+```{r}
+# The day and month Age variables keep us from removing duplicates which is why we need to exclude them both
+dupes = which(duplicated(cohorts_full[,c(-5,-6)]))
+
+# Removing the duplicate observations
+cohorts_full = cohorts_full[-dupes,]
+rm(dupes)
+
+# Creating rows for each cohort group
+# Creating columns for each value in the Age_by_Month column;0-11
+cohorts.wide = reshape2::dcast(cohorts_full,Cohort~Age_by_Month,
+                                value.var="CustomerID",
+                                fun.aggregate = length)
+
+# Cloning the output for retention and churn mixpanels to be used later
+cw.retention = cohorts.wide
+cw.churn = cohorts.wide
+```
+
+
+```{r}
+# Calculating the percentages. month number/join month number
+for (i in rev(3:ncol(cw.retention))){
+  cw.retention[,i] <- round(cw.retention[,i]/cw.retention[,2],4)
+}
+
+# Cloning the retention mixpanel
+retention.avgs <- cw.retention
+
+# When calculating the column averages, 0 won't get ignored,
+# which is a problem. Converting these 0 to NAs solves this issue.
+retention.avgs[retention.avgs == 0.0000] <- NA
+avgs.ret <- round(apply(retention.avgs[,-1],2,mean, na.rm=TRUE),4)
+
+# We use the zero because this is a numerical vector
+# Changing it after the merge can't happen due to the
+# factoring of the Cohort labels
+avgs.ret <- c(0,avgs.ret)
+
+# Adding the averages row to the retention mixpanel
+cw.retention <- rbind(cw.retention,avgs.ret)
+```
+
+**General information for the Retention Rate and Monthly Active Users tables:**
+
+Cohort membership is based on the month of the customers' first transaction. Each of the twelve rows represents a cohort, and columns 1 through 11 represent the months after the first transaction. Column 0 shows the number of customers referred per month. The intersection of the row and column indicates the proportion of active cohort members (column 0 = 100%).
+
+**General information for Retention Rate charts:**
+
+The chart is required to show a long period of time - more than a year. 
+
+
+## Year 2016
+
+```{r}
+cohorts_for_year = 1:4
+```
+
+### Retentation Rate Table
+
+```{r}
+### Retention Mixpanel (in percentages)
+
+# Creating 19 breaks and 20 rgb color values ranging from blue to white
+breaks <- quantile(cw.retention[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+# The retention rate mixpanel
+DT::datatable(cw.retention[cohorts_for_year,c(1:13)],
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatPercentage(c(3:13),2) %>% 
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.retention[c(3:13)]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+### Monthly Active User Table
+
+```{r}
+cw.mau = cw.retention[cohorts_for_year,c(1:13)]
+
+for(i in seq(3,ncol(cw.mau))){
+  cw.mau[i] = round(cw.mau[i]*cw.mau[2])
+}
+
+breaks <- quantile(cw.mau[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+DT::datatable(cw.mau,
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.mau[,3:13]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+
+There is little information available for 2016, so only 4 cohorts - September to December. 
+
+There was a small influx of benefactors in 2016, with the exception of December 2016 - 448 new benefactors. However, it is worth noting that these were mostly irregular donations, as after 1 month the proportion of active philanthropists had fallen to 27%, and after 11 months there were less than 20% active donors in this cohort.
+
+The September 2016 cohort shows the highest retention rate.
+The December 2016 cohort shows the lowest retention rate.
+
+The December 2016 cohort shows the highest number of payers.
+The lowest number of payers is the October 2016 cohort.
+
+### Retention Rate Chart
+
+```{r}
+rec_cohort = 
+  cohorts.wide %>% 
+  na.omit() %>%
+  filter(str_detect(cohorts.wide$Cohort,"2016")) %>% 
+  shift_left_pct() %>% 
+  pivot_longer(-cohort) %>% 
+  mutate(time = as.numeric(str_remove(name,"t")))
+
+rec_cohort$cohort = factor(rec_cohort$cohort, 
+                           labels = c("Sep Cohort",
+                                      "Oct Cohort",
+                                      "Nov Cohort",
+                                      "Dec Cohort"))
+
+p =  rec_cohort %>%
+  ggplot(aes(time, value, color = factor(cohort), group = cohort)) +
+  geom_line(size = 1, alpha=0.7) +
+  geom_point(size = 1) +
+  
+  labs(title = "Benefactors Retention Rate 2016", 
+       x = "N Months after 1st donation",
+       y = "Retention Rate",
+       color = "Cohort") +
+  
+  scale_x_continuous(breaks = c(0,seq(5,78,6))) +
+  
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 50, size = 7))
+ggplotly(p)
+```
+
+In the graph, you can see that only the November cohort, which showed a weak retention rate in the first year, stopped at the 20% Retention Rate by the beginning of 2023. The September cohort showed a serious decline in the first two years and by the beginning of 2023 - only a handful of philanthropists from this cohort remained active. The percentage of active philanthropists from the September, October, and December cohorts is about 10% by the beginning of 2023.
+
+In conclusion, 
+ - Too little information about 2016. 
+ - Small number of benefactors
+ - The September 2016 cohort shows the highest retention rate
+ - The December 2016 cohort shows the lowest retention rate
+ - The December 2016 cohort shows the highest number of payers
+ - The lowest number of payers is the October 2016 cohort
+ 
+
+## Year 2017
+
+```{r}
+cohorts_for_year = 5:16
+```
+
+### Retentation Rate Table
+
+```{r}
+### Retention Mixpanel (in percentages)
+
+# Creating 19 breaks and 20 rgb color values ranging from blue to white
+breaks <- quantile(cw.retention[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+# The retention rate mixpanel
+DT::datatable(cw.retention[cohorts_for_year,c(0:1,2:13)],
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatPercentage(c(3:13),2) %>% 
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.retention[c(3:13)]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+ 
+ - The November & December cohort shows the highest retention rate
+ - The February cohort shows the lowest retention rate
+
+
+### Monthly Active Users Table
+
+```{r}
+cw.mau = cw.retention[cohorts_for_year,c(1:13)]
+
+for(i in seq(3,ncol(cw.mau))){
+  cw.mau[i] = round(cw.mau[i]*cw.mau[2])
+}
+
+breaks <- quantile(cw.mau[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+DT::datatable(cw.mau,
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.mau[,3:13]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+
+ - The largest number of active payers is the December 2017 cohort
+ - The smallest number of active payers is the June 2017 cohort
+
+All cohorts except the December cohort have small proportions of active users, but given the weak retention rates in the 1 month period after the first payment, perhaps the problem is that most donations in 2017 were one-offs. Let's look at the distribution by payment type.
+
+```{r}
+dt = data.frame(CustomerID = transactions$ID.плательщика, 
+                        InvoiceDate = as.Date(transactions$`Дата/время`, format = "%m/%d/%Y"),#date/time
+                        Year = as.numeric(format(transactions$`Дата/время`, '%Y')), #date/time
+                        status = transactions$Статус, #status
+                        type = transactions$Тип) %>% #type
+  filter(status=="Завершена") %>% # completed
+  filter(type!="Возврат") %>% # returned
+  dplyr::select(-status) %>% 
+  filter(Year==2017)
+
+summary(dt$type)
+```
+
+No, most of the payments were made as "Регулярная оплата" ("Regular Payment") or "Оплата с созданием подписки" ("Payment with Subscription Creation"), so we can talk about the weak level of benefactor retention in 2017.
+
+
+### Retention Rate Chart
+
+```{r}
+rec_cohort = 
+  cohorts.wide %>% 
+  na.omit() %>%
+  filter(str_detect(cohorts.wide$Cohort,"2017")) %>% 
+  shift_left_pct() %>% 
+  pivot_longer(-cohort) %>% 
+  mutate(time = as.numeric(str_remove(name,"t")))
+
+rec_cohort$cohort = factor(rec_cohort$cohort, 
+                           labels = c("Jan Cohort",
+                                      "Feb Cohort",
+                                      "Mar Cohort",
+                                      "Apr Cohort",
+                                      "May Cohort",
+                                      "Jun Cohort",
+                                      "Jul Cohort",
+                                      "Aug Cohort",
+                                      "Sep Cohort",
+                                      "Oct Cohort",
+                                      "Nov Cohort",
+                                      "Dec Cohort"))
+
+p =  rec_cohort %>%
+  ggplot(aes(time, value, color = factor(cohort), group = cohort)) +
+  geom_line(size = 1, alpha=0.6) +
+  geom_point(size = 1) +
+  
+  labs(title = "Доля удержания благотворителей 2017 | Benefactors Retention Rate 2017", 
+       x = "N Months after 1st donation",
+       y = "Retention Rate",
+       color = "Cohort") +
+  
+  scale_x_continuous(breaks = c(0,seq(5,78,6))) +
+  
+  coord_cartesian(xlim = c(0,72)) +
+  
+  theme_minimal()
+
+ggplotly(p)
+```
+
+- The December cohort, as mentioned earlier, shows the best retention rates.
+- The worst retention rates in the long term are among the cohorts for February, May, July, September - consistently around 10-15% after 1 year after the first transaction.
+- The best long-term retention rates are for the November and December cohorts - consistently around 20% after 2 years after 1 transaction
+
+Finally,
+  - The 2017 cohort demonstrates poor retention rates.
+  - The November and December cohorts show the highest retention rate
+  - The lowest retention rate is shown by the February 2017 cohort
+  - The largest number of active payers is the December 2017 cohort 
+  - The smallest number of active payers is the June 2017 cohort 
+  
+## Year 2018
+
+```{r}
+cohorts_for_year = 17:28
+```
+
+### Retentation Rate Table
+
+```{r}
+### Retention Mixpanel (in percentages)
+
+# Creating 19 breaks and 20 rgb color values ranging from blue to white
+breaks <- quantile(cw.retention[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+# The retention rate mixpanel
+DT::datatable(cw.retention[cohorts_for_year,c(0:1,2:13)],
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatPercentage(c(3:13),2) %>% 
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.retention[c(3:13)]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+The table shows an improvement in retention rates. The cohorts in January and March stand out especially. The January cohort retained about half of their active donors after 1 month and just over a third after 11 months. In March, after 1 month, 58.25% of donors continued payments, after 11 months - 41%.
+
+However, extremely unsuccessful cohorts in terms of retention are also noticeable - these are May and August. After one month, about a quarter of active philanthropists remained in these cohorts, and after 11 months - 12.71% for the May cohort and 18.56% for the August cohort.
+
+  - The highest retention rate is shown by the January and March cohorts
+  - The lowest retention rate is shown by the May and August cohort
+ 
+
+### Monthly Active Users Table
+
+```{r}
+cw.mau = cw.retention[cohorts_for_year,c(1:13)]
+
+for(i in seq(3,ncol(cw.mau))){
+  cw.mau[i] = round(cw.mau[i]*cw.mau[2])
+}
+
+breaks <- quantile(cw.mau[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+DT::datatable(cw.mau,
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.mau[,3:13]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+In 2018, there were significantly more new philanthropists.
+
+  - The largest number of active payers is the March and August cohort
+  - The smallest number of active payers is the July and May cohort
+
+### Retention Rate Chart
+
+```{r}
+rec_cohort = 
+  cohorts.wide %>% 
+  na.omit() %>%
+  filter(str_detect(cohorts.wide$Cohort,"2018")) %>% 
+  shift_left_pct() %>% 
+  pivot_longer(-cohort) %>% 
+  mutate(time = as.numeric(str_remove(name,"t")))
+
+rec_cohort$cohort = factor(rec_cohort$cohort, 
+                           labels = c("Jan Cohort",
+                                      "Feb Cohort",
+                                      "Mar Cohort",
+                                      "Apr Cohort",
+                                      "May Cohort",
+                                      "Jun Cohort",
+                                      "Jul Cohort",
+                                      "Aug Cohort",
+                                      "Sep Cohort",
+                                      "Oct Cohort",
+                                      "Nov Cohort",
+                                      "Dec Cohort"))
+
+p =  rec_cohort %>%
+  ggplot(aes(time, value, color = factor(cohort), group = cohort)) +
+  geom_line(size = 1, alpha=0.6) +
+  geom_point(size = 1) +
+  
+  labs(title = "Benefactors Retention Rate 2018", 
+       x = "N Months after 1st donation",
+       y = "Retention Rate",
+       color = "Cohort") +
+  
+  scale_x_continuous(breaks = c(0,seq(5,78,6))) +
+  
+  coord_cartesian(xlim = c(0,60)) +
+  
+  theme_minimal()
+ggplotly(p)
+```
+
+The January cohort performed well in terms of Retention Rate in the first two years, but after 2 years the number of active users decreased and remained around 10%. 
+
+May and August are the cohorts that performed the worst. March, January and October are the best performing cohorts.
+
+Let's compare 2017 and 2018 by Retention Rate in the period of 1 year after the first transaction. Since, in general, the distributions in both graphs can be considered to be steadily decreasing in this period, a boxplot graph can help identify the dynamics.
+
+
+```{r}
+rec_cohort_box = 
+  cohorts.wide %>% 
+  na.omit() %>%
+  filter(str_detect(cohorts.wide$Cohort,"2017|2018|2019|2020|2021|2022")) %>% 
+  shift_left_pct() %>% 
+  pivot_longer(-cohort) %>% 
+  mutate(time = as.numeric(str_remove(name,"t")))
+
+rec_cohort_box$year =
+  c(rep("2017",12*78),
+    rep("2018",12*78),
+    rep("2019",12*78),
+    rep("2020",12*78),
+    rep("2021",12*78),
+    rep("2022",12*78))
+
+rec_cohort_box$month = 
+  c(rep(c(
+    rep("Jan",78),
+    rep("Feb",78),
+    rep("Mar",78),
+    rep("Apr",78),
+    rep("May",78),
+    rep("Jun",78),
+    rep("Jul",78),
+    rep("Aug",78),
+    rep("Sep",78),
+    rep("Oct",78),
+    rep("Nov",78),
+    rep("Dec",78)),6))
+
+rec_cohort_box = rec_cohort_box %>% filter(time!=0)
+
+rec_cohort_box$label = paste0(rec_cohort_box$month,rec_cohort_box$year)
+rec_cohort_box$month = factor(rec_cohort_box$month, levels = month.abb)
+
+### Period: 1 year
+
+pj = rec_cohort_box %>% 
+  filter(time<12) %>% 
+  filter(year == 2017 | year == 2018) %>% 
+  ggplot() + 
+  geom_boxplot(aes(x=month,y=value, col = year),alpha = 0.6) + 
+  labs(title = "Dynamics of Engagement Level - 2017 vs 2018 - Period 1 year", x = "")
+
+ggplotly(pj)
+```
+
+Cohort dynamics (period - 1st year since first transaction) January, February, March, July and September are much improved in 2018 compared to 2017. The May 2018 cohort is not much different from 2017 at the beginning, but by the end of the year the level of active payers drops quite a bit. The August, November and December 2018 cohorts also performed much worse than 2017 - engagement is down. 
+
+In conclusion,
+ - The 2018 cohorts are showing good retention rates
+ - Performance has mostly improved compared to 2017 (November, December, May and August however have fared worse)
+ - The January and March cohorts show the highest retention rates
+ - The May and August cohorts show the lowest retention rate
+ - The cohorts of March and August have the highest number of active payers
+ - The lowest number of active payers are in the July and May cohorts
+
+
+## Year 2019 
+
+```{r}
+cohorts_for_year = 29:40
+```
+
+### Retentation Rate Table
+
+```{r}
+### Retention Mixpanel (in percentages)
+
+# Creating 19 breaks and 20 rgb color values ranging from blue to white
+breaks <- quantile(cw.retention[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+# The retention rate mixpanel
+DT::datatable(cw.retention[cohorts_for_year,c(0:1,2:13)],
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatPercentage(c(3:13),2) %>% 
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.retention[c(3:13)]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+No cohort reached 50% engagement after 1 month, but overall, the cohorts show a good level of engagement. The clear outsiders in terms of engagement are June and October.
+
+ - The August and February cohorts show the highest retention rate
+ - The June and October cohort show the lowest retention rate
+
+### Monthly Active Users Table
+
+```{r}
+cw.mau = cw.retention[cohorts_for_year,c(1:13)]
+
+for(i in seq(3,ncol(cw.mau))){
+  cw.mau[i] = round(cw.mau[i]*cw.mau[2])
+}
+
+breaks <- quantile(cw.mau[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+DT::datatable(cw.mau,
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.mau[,3:13]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+There has been a significant increase in the number of new benefactors in 2019. 
+
+ - The highest number of active payers are in the June, November and December cohorts
+ - The lowest number of active payers are in the August and May cohorts
+
+
+### Retention Rate Chart
+
+```{r}
+rec_cohort = 
+  cohorts.wide %>% 
+  na.omit() %>%
+  filter(str_detect(cohorts.wide$Cohort,"2019")) %>% 
+  shift_left_pct() %>% 
+  pivot_longer(-cohort) %>% 
+  mutate(time = as.numeric(str_remove(name,"t")))
+
+rec_cohort$cohort = factor(rec_cohort$cohort, 
+                           labels = c("Jan Cohort",
+                                      "Feb Cohort",
+                                      "Mar Cohort",
+                                      "Apr Cohort",
+                                      "May Cohort",
+                                      "Jun Cohort",
+                                      "Jul Cohort",
+                                      "Aug Cohort",
+                                      "Sep Cohort",
+                                      "Oct Cohort",
+                                      "Nov Cohort",
+                                      "Dec Cohort"))
+
+p =  rec_cohort %>%
+  ggplot(aes(time, value, color = factor(cohort), group = cohort)) +
+  geom_line(size = 1, alpha=0.6) +
+  geom_point(size = 1) +
+  
+  labs(title = "Benefactors Retention Rate 2019", 
+       x = "N Months after 1st donation",
+       y = "Retention Rate",
+       color = "Cohort") +
+  
+  scale_x_continuous(breaks = c(0,seq(5,78,6))) +
+  
+  coord_cartesian(xlim=c(0,49)) +
+  
+  theme_minimal()
+
+ggplotly(p)
+```
+
+It is difficult to identify clear leaders in the two-year period in the graph, with the June and October cohorts (17-28%) still the clear outsiders.
+
+```{r}
+### Period: 1 year
+
+pj = rec_cohort_box %>% 
+  filter(time<12) %>% 
+  filter(year == 2018 | year == 2019) %>% 
+  ggplot() + 
+  geom_boxplot(aes(x=month,y=value, col = year),alpha = 0.6) + 
+  labs(title = "Dynamics of Engagement Levels - 2018 vs 2019 - Period 1 year", x = "")
+
+ggplotly(pj)
+```
+
+Comparing to the 2018 cohorts, it is difficult to say for sure whether there has been a deterioration or improvement in momentum.
+
+In conclusion, 
+ - Retention Rate dynamics have changed slightly compared to 2017 cohorts
+ - The highest retention rate show the cohorts of August and February
+ - The June and October cohorts show the lowest retention rate
+ - The June, November and December cohorts have the highest number of active payers
+ - The lowest number of active payers is in the August and May cohorts
+
+## Year 2020 
+
+```{r}
+cohorts_for_year = 41:52
+```
+
+### Retentation Rate Table
+
+```{r}
+### Retention Mixpanel (in percentages)
+
+# Creating 19 breaks and 20 rgb color values ranging from blue to white
+breaks <- quantile(cw.retention[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+# The retention rate mixpanel
+DT::datatable(cw.retention[cohorts_for_year,c(0:1,2:13)],
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatPercentage(c(3:13),2) %>% 
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.retention[c(3:13)]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+Retention Rate has clearly deteriorated. 
+
+ - The January and July cohorts show the highest retention rate
+ - The August and October cohorts show the lowest retention rate
+
+### Monthly Active Users Table
+
+```{r}
+cw.mau = cw.retention[cohorts_for_year,c(1:13)]
+
+for(i in seq(3,ncol(cw.mau))){
+  cw.mau[i] = round(cw.mau[i]*cw.mau[2])
+}
+
+breaks <- quantile(cw.mau[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+DT::datatable(cw.mau,
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.mau[,3:13]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+In 2020, some months added a huge number of new payers - April (2,817) and October (1,258). 
+
+ - The cohorts with the highest number of active payers are April and October
+ - The least number of active payers is the June cohort
+
+### Retention Rate Chart
+
+```{r}
+rec_cohort = 
+  cohorts.wide %>% 
+  na.omit() %>%
+  filter(str_detect(cohorts.wide$Cohort,"2020")) %>% 
+  shift_left_pct() %>% 
+  pivot_longer(-cohort) %>% 
+  mutate(time = as.numeric(str_remove(name,"t")))
+
+rec_cohort$cohort = factor(rec_cohort$cohort, 
+                           labels = c("Jan Cohort",
+                                      "Feb Cohort",
+                                      "Mar Cohort",
+                                      "Apr Cohort",
+                                      "May Cohort",
+                                      "Jun Cohort",
+                                      "Jul Cohort",
+                                      "Aug Cohort",
+                                      "Sep Cohort",
+                                      "Oct Cohort",
+                                      "Nov Cohort",
+                                      "Dec Cohort"))
+
+p =  rec_cohort %>%
+  ggplot(aes(time, value, color = factor(cohort), group = cohort)) +
+  geom_line(size = 1, alpha=0.6) +
+  geom_point(size = 1) +
+  
+  labs(title = "Benefactors Retention Rate 2020", 
+       x = "N Months after 1st donation",
+       y = "Retention Rate",
+       color = "Cohort") +
+  
+  scale_x_continuous(breaks = c(0,seq(5,78,6))) +
+  
+  coord_cartesian(xlim=c(0,37)) +
+  
+  theme_minimal()
+ggplotly(p)
+```
+
+When looking at the many months after 1 payment - January clearly stands out among the other cohorts (26.4% - after 1.5 years, a drop from 47.8 to 24.8% of active users in two years). October and August cohorts - October and August are particularly visible as poorly retaining payers.
+
+
+```{r}
+### Period: 1 year
+
+pj = rec_cohort_box %>% 
+  filter(time<12) %>% 
+  filter(year == 2019 | year == 2020) %>% 
+  ggplot() + 
+  geom_boxplot(aes(x=month,y=value, col = year),alpha = 0.6) + 
+  labs(title = "Dynamics of Engagement Level - 2019 vs 2020 - Period 1 year", x = "")
+
+ggplotly(pj)
+```
+
+With the exception of the January cohort, the 2019 cohorts benefit from the Retention Rate trend.
+
+In conclusion, 
+ - 2020 did not yield as many long-term benefactors as 2018 and 2017
+ - The January and July cohorts show the highest Retention Rate
+ - The August and October cohorts show the lowest retention rate
+ - The cohorts with the highest number of active payers are April and October
+ - The least number of active payers is the June cohort
+
+## Year 2021
+
+```{r}
+cohorts_for_year = 53:64
+```
+
+### Retentation Rate Table
+
+```{r}
+### Retention Mixpanel (in percentages)
+
+# Creating 19 breaks and 20 rgb color values ranging from blue to white
+breaks <- quantile(cw.retention[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+# The retention rate mixpanel
+DT::datatable(cw.retention[cohorts_for_year,c(0:1,2:13)],
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatPercentage(c(3:13),2) %>% 
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.retention[c(3:13)]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+ - The August, October and February cohorts show the highest retention rate
+ - The cohorts with the lowest retention rates are April and December
+
+
+### Monthly Active Users Table
+
+```{r}
+cw.mau = cw.retention[cohorts_for_year,c(1:13)]
+
+for(i in seq(3,ncol(cw.mau))){
+  cw.mau[i] = round(cw.mau[i]*cw.mau[2])
+}
+
+breaks <- quantile(cw.mau[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+DT::datatable(cw.mau,
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.mau[,3:13]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+In 2021, the March(1148) and December(1594) cohorts had the largest influx of new benefactors.
+
+ - The cohorts of March and December have the highest number of active contributors
+ - The cohorts of June and September have the fewest number of active payers
+
+### Retention Rate Chart
+
+```{r}
+rec_cohort = 
+  cohorts.wide %>% 
+  na.omit() %>%
+  filter(str_detect(cohorts.wide$Cohort,"2021")) %>% 
+  shift_left_pct() %>% 
+  pivot_longer(-cohort) %>% 
+  mutate(time = as.numeric(str_remove(name,"t")))
+
+rec_cohort$cohort = factor(rec_cohort$cohort, 
+                           labels = c("Jan Cohort",
+                                      "Feb Cohort",
+                                      "Mar Cohort",
+                                      "Apr Cohort",
+                                      "May Cohort",
+                                      "Jun Cohort",
+                                      "Jul Cohort",
+                                      "Aug Cohort",
+                                      "Sep Cohort",
+                                      "Oct Cohort",
+                                      "Nov Cohort",
+                                      "Dec Cohort"))
+
+p =  rec_cohort %>%
+  ggplot(aes(time, value, color = factor(cohort), group = cohort)) +
+  geom_line(size = 1, alpha=0.6) +
+  geom_point(size = 1) +
+  
+  labs(title = "Benefactors Retention Rate 2021", 
+       x = "N Months after 1st donation",
+       y = "Retention Rate",
+       color = "Cohort") +
+  
+  scale_x_continuous(breaks = c(0,seq(5,78,6))) +
+  
+  coord_cartesian(xlim=c(0,25)) +
+  
+  theme_minimal()
+
+ggplotly(p)
+```
+
+It is difficult to identify unambiguous leaders on the chart or in the table. For the first except for December, September, May and April - all cohorts show a fairly average Retention Rate result (20-41%)
+
+```{r}
+### Period: 1 year
+
+pj = rec_cohort_box %>% 
+  filter(time<12) %>% 
+  filter(year == 2020 | year == 2021) %>% 
+  ggplot() + 
+  geom_boxplot(aes(x=month,y=value, col = year),alpha = 0.6) + 
+  labs(title = "Dynamics of Engagement Level - 2020 vs 2021 - Period 1 year", x = "")
+
+ggplotly(pj)
+```
+
+The cohorts of August and October started to show a better result of Retention Rate dynamics, while the cohorts of January, December and April show less good results compared to last year. Overall, the picture has not changed too much since last year.
+
+In conclusion, 
+ - Retention Rate dynamics have not changed much from 2020
+ - The August, October and February cohorts show the highest retention rate
+ - The cohorts with the lowest retention rates are April and December
+ - The cohorts of March and December have the highest number of active contributors
+ - The cohorts of June and September have the fewest number of active payers
+
+## Year 2022
+
+```{r}
+cohorts_for_year = 65:76
+```
+
+### Retentation Rate Table
+
+```{r}
+### Retention Mixpanel (in percentages)
+
+# Creating 19 breaks and 20 rgb color values ranging from blue to white
+breaks <- quantile(cw.retention[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+# The retention rate mixpanel
+DT::datatable(cw.retention[cohorts_for_year,c(0:1,2:13)],
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatPercentage(c(3:13),2) %>% 
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.retention[c(3:13)]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+Overall, it can be seen that Retention Rates have clearly deteriorated compared to last year, if we look at the period after 1 month. Only one cohort crossed the 40% Retention Rate mark after 1 month, mostly Retention Rate around 30%. Given that the number of people in the cohorts has rather become smaller, this may suggest a negative trend. 
+
+ - The April and November cohorts show the highest retention rate
+ - The lowest retention rate is shown by the December cohort
+
+### Monthly Active Users Table
+
+```{r}
+cw.mau = cw.retention[cohorts_for_year,c(1:13)]
+
+for(i in seq(3,ncol(cw.mau))){
+  cw.mau[i] = round(cw.mau[i]*cw.mau[2])
+}
+
+breaks <- quantile(cw.mau[,3:13], probs = seq(.05, .95, .05), na.rm = TRUE)
+colors <- sapply(round(seq(130, 80, length.out = length(breaks) + 1), 0),
+                 function(x){ rgb(x,x,155, maxColorValue = 155) } )
+
+DT::datatable(cw.mau,
+              class = 'cell-border stripe',
+             rownames = FALSE,
+             options = list(
+               ordering=F,
+               dom = 't',
+               pageLength = 12) ) %>%
+             formatStyle("0",
+                         backgroundColor = 'lightgrey',
+                         fontWeight = 'bold') %>%
+  formatStyle("1", fontWeight = 'bold') %>%
+  formatStyle(names(cw.mau[,3:13]),color = 'white',fontWeight = 'bold', backgroundColor = styleInterval(breaks,colors))
+```
+
+ - The cohorts with the highest number of active payers are the December and April
+ - The lowest number of active payers is in the September cohort
+
+In conclusion, 
+ - Retention Rate dynamics have worsened compared to 2021
+ - The April and November cohorts show the highest retention rate
+ - The lowest retention rate is shown by the December cohort
+ - The cohorts with the highest number of active payers are the December and April
+ - The lowest number of active payers is in the September cohort
+ 
+# Results
+
+## General Dynamics by Year
+
+*2016:* Too little information; Low number of benefactors 
+*2017:* Cohorts show poor retention rates. 
+*2018:* Cohorts are showing good retention rates; Performance is mostly improved over 2017 (November, December, May, and August however got worse)
+*2019:* Retention Rate dynamics are little changed from 2018
+*2020:* This year did not yield as many long-term donors as 2018 and 2019
+*2021:* Retention Rate dynamics are little changed from 2020
+*2022:* Retention Rate dynamics have deteriorated compared to 2021
+
+## Months with the highest Retention Rate
+
+```{r}
+dtdt = data.frame(
+  Cohort = c("September 2016",
+            "November 2017",
+            "December 2017",
+            "January 2018",
+            "March 2018",
+            "August 2019",
+            "February 2019",
+            "January 2020",
+            "July 2020",
+            "August 2021",
+            "October 2021",
+            "February 2021",
+            "April 2022",
+            "November 2022"),
+  `After 1 month` = c("72.60% (98)",
+                       "45.31% (111)",
+                       "59.19% (335)",
+                       "48.40% (106)",
+                       "58.25% (300)",
+                       "49.02% (100)",
+                       "45.39% (182)",
+                       "47.80% (185)",
+                       "40.99% (166)",
+                       "41.92% (306)",
+                       "41.19% (276)",
+                       "41.65% (232)",
+                       "41.40% (419)",
+                       "35.87% (177)"),
+  `After 11 months` = c("46.46% (62)",
+                          "29.80% (73)",
+                          "38.16% (216)",
+                          "32.88% (72)",
+                          "40.97% (211)",
+                          "31.86% (65)",
+                          "31.92% (128)",
+                          "34.11% (132)",
+                          "26.17% (111)",
+                          "24.93% (182)",
+                          "23.88% (160)",
+                          "28.01% (156)",
+                          NA,
+                          NA)
+  )
+
+datatable(dtdt, options = list(
+  paging = F,
+  pageLength =  14))
+```
+
+In parentheses in the table is the number of donors still conducting the transaction after n months.
+
+1. It is impossible to identify one most frequent month of the year with the highest retention rate. January (occurs 2 times), February (2), March(1), April(1), May(0), June (0), July (1), August (2), September (1), October (1), November(2), December(1). 
+
+2.The highest retention rate after one month is December 2017 - 59.19% (not including the very first month of donations work - September 2016). 
+
+3.It can be seen that 2020-2022 had a lower Retention Rate. For 2018 the best result (after 1 month) is 58.25%, for 2019 - 49.02%, for 2020 - 47.8%, for 2021 - 41.92%, for 2022 - 41.4% (Similar situation after 11 months). Which may indicate a decrease in users' interest in paying regularly once a month. Perhaps people do not want to pay specifically in the monthly period, or perhaps new benefactors prefer one-time transactions.
+
+```{r}
+#oldtable
+cohorts_full = data.frame(CustomerID = transactions$ID.плательщика, 
+                        InvoiceDate = as.Date(transactions$`Дата/время`, format = "%m/%d/%Y"),
+                        Year = as.numeric(format(transactions$`Дата/время`, '%Y')),
+                        status = transactions$Статус,
+                        type = transactions$Тип) %>% 
+  filter(status=="Завершена") %>% 
+  filter(type!="Возврат") %>% 
+  dplyr::select(-status)
+cohorts_full = cohorts_full %>% na.omit()
+join.date = aggregate(InvoiceDate~CustomerID,cohorts_full, min, na.rm = TRUE)
+colnames(join.date)[2] = "Join_Date"
+cohorts_full = merge(cohorts_full, join.date, by.x = "CustomerID", by.y = "CustomerID", all.x = TRUE)
+dupes = which(duplicated(cohorts_full[,c(1,5)]))
+cohorts_full = cohorts_full[-dupes,]
+#oldtable_done
+
+
+smth = cohorts_full %>% group_by(Year) %>% summarize(count = n())
+
+smth2 = cohorts_full %>% group_by(Year,type) %>% summarize(count = n()) 
+
+smth2$type = recode_factor(smth2$type, payment = "Оплата", pay = "Оплата с созданием подписки", Regular_payment = "Регулярная оплата")
+
+levels(smth2$type) = c("Returned", "Payment", "Payment with subscription creation", "Regular payment")
+
+smth2$share = c(smth2$count[1:3]/as.numeric(smth[1,2]),
+                smth2$count[4:6]/as.numeric(smth[2,2]),
+                smth2$count[7:9]/as.numeric(smth[3,2]),
+                smth2$count[10:12]/as.numeric(smth[4,2]),
+                smth2$count[13:15]/as.numeric(smth[5,2]),
+                smth2$count[16:18]/as.numeric(smth[6,2]),
+                smth2$count[19:21]/as.numeric(smth[7,2]),
+                smth2$count[22:24]/as.numeric(smth[8,2])) %>% round(4)
+
+
+plot_ly(smth2, x = ~type, y = ~share, type = 'bar',frame = ~Year)
+```
+
+However, judging by this graph, new benefactors are mostly switching from the payment types "Payment" and "Payment with Subscription Creation" to the payment type "Regular Subscription": in 2016 - 16% of new benefactors used "Regular Payment", in 2022 34% of new payers started using this payment type, while in 2016 - 73% used one-time payment and in 2022 already 58%.
+
+```{r}
+plot_ly(smth2, x = ~type, y = ~count, type = 'bar',frame = ~Year)
+```
+
+The answer probably lies in the volume of transactions. The number of donors is growing every year: 
+255 in 2016  
+1 277 in 2017  
+1 916 in 2018  
+2 746 in 2019  
+6 755 in 2020 (the percentage of "regular payment" usage this year dropped by 4 percent compared to last year)
+6 199 in 2021
+6 750 in 2022
+
+Accordingly, even though new donors' interest in regular payment is increasing, one-time payment is still the most frequent choice and at the same time the total number of users is increasing, so the **proportion** of active new users continuing to donate next month is decreasing, but at the same time the **number** of active new users continuing to donate next month is increasing, as can be seen in the main table.
+
+## Months with the lowest retention rate
+
+```{r}
+dtdt0 = data.frame(
+  Cohort = c("December 2016",
+              "February 2017",
+              "May 2018",
+              "August 2018",
+              "June 2019",
+              "October 2019",
+              "August 2020",
+              "October 2020",
+              "April 2021",
+              "December 2021",
+              "December 2022"),
+  
+  `After 1 month` = c("27.23%",
+                       "18.26%",
+                       "25.41%",
+                       "24.85%",
+                       "26.35%",
+                       "27.35%",
+                       "18.80%",
+                       "22.50%",
+                       "24.18%",
+                       "24.72%",
+                       "19.35%"),
+  
+  `After 11 months` = c("19.20%",
+                          "16.89%",
+                          "12.71%",
+                          "18.56%",
+                          "20.51%",
+                          "20.63%",
+                          "13.29%",
+                          "12.88%",
+                          "16.69%",
+                          "14.05%",
+                          NA)
+  )
+
+datatable(dtdt0, options = list(
+  paging = F,
+  pageLength =  11))
+```
+
+1. Most often (70-80% of the time) benefactors who made their first transaction in December will not return.
+
+2. August and October are also the months when most of the newcomers make only one payment.
+
+## Months with the highest number of active payers
+
+```{r}
+dtdt1 = data.frame(
+  Cohort = c("December 2016",
+            "December 2017",
+            "March 2018",
+            "August 2018",
+            "June 2019",
+            "November 2019",
+            "December 2019",
+            "April 2020",
+            "October 2020",
+            "March 2021",
+            "December 2021",
+            "December 2022",
+            "April 2022"),
+  
+  Initially = c(448,
+                 566,
+                 515,
+                 652,
+                 668,
+                 974,
+                 846,
+                 2817,
+                 1258,
+                 1148,
+                 1594,
+                 1669,
+                 1012),
+  
+  `After 1 month` = c(122,
+                       335,
+                       300,
+                       162,
+                       176,
+                       469,
+                       390,
+                       976,
+                       283,
+                       414,
+                       394,
+                       323,
+                       419)
+)
+
+datatable(dtdt1, options = list(
+  paging = F,
+  pageLength =  13))
+```
+ 
+1. The highest number of new benefactors joined in April 2020, December 2022, December 2021.
+ 
+2. Most new benefactors join in Dec (5/13 months with the highest number of new benefactors is Dec). However, despite the large number of people are not regular donors, most of them do not continue paying after one month.
+
+3. also April and March can be called attractive for new benefactors (unlike December about 40-50% of them continue to make transactions in the following months)
+
+## Months with the lowest number of active payers
+
+```{r}
+dtdt2 = data.frame(
+  Cohort = c("October 2016",
+            "June 2017",
+            "July 2018",
+            "May 2018",
+            "August 2019",
+            "May 2019",
+            "June 2020",
+            "June 2021",
+            "September 2021",
+            "September 2022"),
+  
+  Initially = c(99,
+                 91,
+                 105,
+                 181,
+                 204,
+                 203,
+                 389,
+                 474,
+                 512,
+                 406),
+  
+  `After 1 month` = c(46,
+                       31,
+                       38,
+                       46,
+                       100,
+                       84,
+                       151,
+                       169,
+                       166,
+                       129)
+)
+
+datatable(dtdt2, options = list(
+  paging = F,
+  pageLength =  10))
+```
+
+1. The period from May to September is the least attractive for new benefactors.
+
+2. June is the main month with the lowest number of active payers
+
+# Final Conclusions
+
+1. It is not possible to identify one most frequent month of the year with the highest retention rate.
+
+2. The highest retention rate after one month is December 2017 at 59.19% (not including the very first month of donations September 2016).
+
+3. Despite the increase in new donors' interest in regular payment, one-time payment is still the most frequent choice and at the same time the total number of users is increasing, so the proportion of active new users continuing to donate next month is decreasing, but at the same time the number of active new users continuing to donate next month is increasing.
+
+4. Most often (exception - *) 70-80% of benefactors who made their first transaction in December no longer return.
+
+5. Also August and October are the months when most of the newcomer philanthropists make only one payment.
+
+6. The highest number of new benefactors came in April 2020, December 2022, December 2021. Overall, there is a noticeable strong spike in the popularity of charitable activity in 2020, after which the number of benefactors held roughly flat.
+ 
+7. Most new philanthropists join in Dec (5/13 months with the highest number of new philanthropists are Dec). However, despite the high number of benefactors - these are not regular donors, the majority of them do not continue to pay after one month.
+
+8. Also April and March can be called attractive for new benefactors (unlike December about 40-50% of them continue to make transactions in the following months).
+
+9. The period from May to September is the least attractive for new benefactors.
+
+10. June is the main month with the lowest number of active payers.
