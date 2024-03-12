@@ -1,0 +1,147 @@
+---
+title: "How to choose Beer with MDS"
+author: "Timur Sharifullin"
+date: "2023-03-15"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+library(smacof)
+library(tidyverse)
+library(ggplot2)
+library(ggrepel)
+
+pivo = read.csv("beer_reviews.csv")
+
+set.seed(1111)
+knitr::opts_chunk$set(message= F, warning=F)
+```
+
+
+```{r}
+# choose the variables
+pivo = pivo[,c(2,4,5,6,9,10,11)]
+
+# aggregated ratings
+pivo_summary <- pivo %>%
+  group_by(beer_name, brewery_name) %>%
+  dplyr::summarize(across(c(review_overall, review_aroma, review_appearance, review_palate, review_taste), median,
+                          .names = "{col}"))
+
+# filtering by one brewing company
+pivo_dark = pivo_summary %>% filter(brewery_name == "Dark Horse Brewing Company") %>% as.data.frame()
+
+rownames(pivo_dark) = pivo_dark$beer_name
+pivo_dark = select(pivo_dark,-brewery_name,-beer_name)
+head(pivo_dark)
+```
+
+I used Beer Reviews for this project, however, it has too many observations(1.5 million), so firstly I aggregated the median review rating for every beer and then I cut the dataset to analyze only "Dark Horse Brewing Company" products
+
+
+```{r}
+matrixxx = dist(pivo_dark)
+```
+
+
+```{r}
+ratio = mds(matrixxx, type = "ratio")
+ratio
+plot(ratio, plot.type = "Shepard")
+```
+
+```{r}
+interval = mds(matrixxx, type = "interval")
+interval
+plot(interval, plot.type = "Shepard")
+```
+
+```{r}
+ordinal = mds(matrixxx, type = "ordinal")
+ordinal
+plot(ordinal, plot.type = "Shepard")
+```
+
+```{r}
+mspline = mds(matrixxx, type = "mspline")
+mspline
+plot(mspline, plot.type = "Shepard")
+```
+
+It seems that ordinal type of MDS has the best fit, both by shepard diagram and Stress-1 value (good fit)
+
+```{r}
+head(as.data.frame(sort(ordinal$spp,decreasing=T)),20)
+```
+As for stress per point there is no visible outliers.
+
+```{r}
+jackmds(ordinal)
+```
+
+Jackknife strategy for MDS for examination of the stability of a solution shows perfect results -  Stability measure is almost 1, Cross validity = 1. So, the model is stable and valid
+
+```{r}
+bootsi_i_pivo = bootmds(ordinal, as.data.frame(t(pivo_dark)), method.dat = "euclidean", nrep = 300)
+bootsi_i_pivo
+```
+
+Finally, the stability coefficient of 0.9158 suggests that the MDS solution is quite stable, as it indicates that approximately 91% of the variability in the original solution is preserved in the bootstrap replicates.
+
+
+```{r}
+plot_data = as.data.frame(ordinal$conf)
+bi_points = biplotmds(ordinal,extvar=pivo_dark)$coefficients %>% t() %>% as.data.frame()
+
+ggplot() +
+  geom_point(data= plot_data, aes(x = D1, y = D2)) +
+  geom_point(data = bi_points, aes(x = D1, y = D2), color = "darkgreen", shape = "square") +
+  
+  geom_rect(aes(xmin = -Inf, xmax = -1, ymin = -Inf, ymax = Inf),
+            fill = "red", alpha = 0.2) + 
+  geom_label(aes(x=-1.7, y=1.5, label="Do not even try"),size=3) +
+  
+  geom_rect(aes(xmin = -1, xmax = 0.5, ymin = -Inf, ymax = -0.5),
+            fill = "yellow", alpha = 0.2) + 
+  geom_label(aes(x=-0.2, y=-1.5, label="Special beer, 
+looks good/has a special palate, 
+but aroma is not so good"),size=3) +
+  
+  geom_rect(aes(xmin = -1, xmax = 0.5, ymin = 0.5, ymax = Inf),
+            fill = "yellow", alpha = 0.2) + 
+  geom_label(aes(x=-0.2, y=1.5, label="Special beer with good aroma and 
+not so good palate/appearance"),size=3) +
+  
+  geom_rect(aes(xmin = -1, xmax = 0.5, ymin = -0.5, ymax = 0.5),
+            fill = "orange", alpha = 0.2) + 
+  geom_label(aes(x=-0.2, y=0, label="It is mid"),size=3) +
+  
+  geom_rect(aes(xmin = 0.5, xmax = Inf, ymin = -Inf, ymax = Inf),
+            fill = "green", alpha = 0.2) + 
+  geom_label(aes(x=1.2, y=1.5, label="You should try it!"),size=3) +
+  
+  geom_text_repel(data = plot_data, aes(x = D1, y = D2, label = row.names(plot_data)), 
+                size = 2, fontface = 'bold', min.segment.length = 8, 
+                nudge_x = 0.1, nudge_y = 0.1, direction = "both") +
+  
+  geom_text_repel(data = bi_points, aes(x = D1, y = D2, label = row.names(bi_points), color = "green"), 
+                size = 2, min.segment.length = 8, 
+                nudge_x = 0.1, nudge_y = 0.1, direction = "both") +
+    
+  labs(x ="", y = "", title = "To Beer or not to Beer?", 
+       subtitle = "MDS Map: How similarly good is beer of Dark Horse Brewing Company?") +
+  
+  theme(legend.position = "none")
+```
+
+1. There are not much beer in the "Do not even try" sector (which tells us that Dark Horse Brewing Company is quite alright in terms of beer production) - only 4. The are not much similar, but only in cumulative terms (so, the reviews differ by 0.5-1 point), in fact there are just outstandingly bad (common rating: 2.5-3).
+
+2. Most of the beer is quite mid in terms of ratings. Orange sector describes beer that have mostly similar ratings for every type of review (common rating: 2.5-3).  
+
+3. However we can see some mid beer marks that wins in one aspect but loses in another (yellow sectors). Beer in the yellow region has mid ratings, aside of review for palate/appearance or aroma. Yellow sectors can be called "Beer not for everyone" 
+
+4. Green Region - is the beer that has good reviews (common rating: 4-5). Their ratings is high and there is not so much difference between these beer marks - they are good.
+
+5.Despite the fact, that it is not really appropriate to interpret the dimensions of the MDS, it seems that all of the beer qualities "vectors" are directed to the right, so we really can say, that the better the beer the more right on the plot it is. Green and red regions are more similar in terms of y-axis than mid (yellow and orange) sectors. So, if the beer is bad - it is just bad (the same with good), but if the beer is not so good and not so bad - maybe it is not mid, but just special.
