@@ -1,0 +1,578 @@
+---
+title: "Binary Logistic Regression on Churn for Bank Customers Dataset"
+author: "Timur Sharifullin"
+date: '2022-11-14'
+output: 
+  html_document:
+    theme: lumen
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(rcompanion)
+library(sjPlot)
+library(generalhoslem)
+library(pROC)
+library(car)
+library(pscl)
+
+knitr::opts_chunk$set(message= F, warning=F)
+```
+
+
+## 1.Dataset contents & Project Idea
+
+```{r, message=F, echo=F}
+ds = read.csv("churn_data.csv")
+```
+
+*'Churn for Bank Customers'* is a Kaggle Dataset which contains artificial information about bank clients for 10 thousand clients from 3 countries: France, Germany, Spain. It is important for banks to know in advance which client tends to leave the company, in other words to churn, since new clients are more expensive to get than to prevent churning. In the analysis the churn will be predicted using Binary Logistic Regression model.   
+
+```{r}
+cat("Number of Observations in Dataset:", nrow(ds),
+    "\nNumber of Variables in Dataset:", ncol(ds),
+    "\nNumber of Observations with Missing Data in Dataset:", nrow(ds)-nrow(na.omit(ds)))
+```
+
+Variables Description ([source]('https://www.kaggle.com/datasets/mathchi/churn-for-bank-customers?resource=download')):  
+  1. *RowNumber* — corresponds to the record (row) number and has no effect on the output.  
+  2. *CustomerId* — contains random values and has no effect on customer leaving the bank.  
+  3. *Surname* — the surname of a customer has no impact on their decision to leave the bank.  
+  4. *CreditScore* — can have an effect on customer churn, since a customer with a higher credit score is less likely to leave the bank.  
+  5. *Geography* — a customer’s location can affect their decision to leave the bank.  
+  6. *Gender* — it’s interesting to explore whether gender plays a role in a customer leaving the bank.  
+  7. *Age* — this is certainly relevant, since older customers are less likely to leave their bank than younger ones.  
+  8. *Tenure* — refers to the number of years that the customer has been a client of the bank. Normally, older clients are more loyal and less likely to leave a bank.  
+  9. *Balance* — also a very good indicator of customer churn, as people with a higher balance in their accounts are less likely to leave the bank 10. compared to those with lower balances.  
+  10. *NumOfProducts* — refers to the number of products that a customer has purchased through the bank.  
+  11. *HasCrCard*  —  denotes whether or not a customer has a credit card. This column is also relevant, since people with a credit card are less likely to leave the bank.  
+  12. *IsActiveMember*  —  active customers are less likely to leave the bank.  
+  13. *EstimatedSalary*  —  as with balance, people with lower salaries are more likely to leave the bank compared to those with higher salaries.  
+  14. *Exited* — whether or not the customer left the bank.  
+
+Variables class:
+```{r message=F}
+ds$RowNumber = ds$RowNumber %>% as.integer()
+ds$CustomerId = as.integer(ds$CustomerId)
+ds$Geography = ds$Geography %>% as.factor()  
+ds$Gender = ds$Gender %>% as.factor() 
+ds$HasCrCard = ds$HasCrCard %>% as.factor() 
+ds$IsActiveMember =  ds$IsActiveMember %>% as.factor() 
+ds$Exited = ds$Exited %>% as.factor()
+
+cl = sapply(ds,class)
+col = as.vector(colnames(ds))
+
+data.frame(variable = col,class = cl) %>%
+  group_by(class,variable) %>%
+  summarise()
+```
+
+## 2. Research Question & Hypotheses
+The dependent variable is "Exited" [binary] - whether a client has churn or not  
+Independent variables are:  
+1. Balance [continuous]  
+2. IsActiveMember [binary]  				
+3. HasCrCard [binary]  
+4. Geography (control) [factor]  
+5. Age (control) [continuous]  	
+6. Gender	(control) [binary]  
+
+*RQ*: Which categories of client data would influence the churn of the bank client?
+
+*Hypotheses*:  
+1. People with a higher balance in their accounts are less likely to stop using the bank services compared to those with lower balances  
+2. Clients who are active members will be less likely to stop using the bank services  
+3. Clients who had a credit card are less likely to stop using the bank services  
+
+## 3. Data Descriptives
+
+```{r}
+# data preparation
+ds1 = ds %>% dplyr::select(Exited, Balance, IsActiveMember, HasCrCard, Geography, Age, Gender) %>% na.omit()
+summary(ds1)
+```
+
+
+### 3.1. Variables Distribution
+#### 3.1.1. Exited
+
+```{r}
+g = ggplot(ds1, aes(as.logical(as.integer(Exited)-1))) + labs(title = "Distribution of Churned Client", x = "Is Client is Churned")
+p = g + geom_bar(aes(fill = Exited)) + theme(legend.position = 'none')
+ggplotly(p)
+```
+
+80% of observations in data is non-churned clients and only 20% are clients who left the company. So, it certainly can be said that non-churned clients is the overrepresented group in the sample. 
+
+#### 3.1.2. Balance
+
+```{r}
+fig = plot_ly(x = ds1$Balance, type = "histogram") %>% layout(xaxis = list(title = 'Balance ($)'), title = "Balance Distribution")
+fig
+```
+
+By the graph it can be seen that many client had zero-balance, it can affect the model in the future.
+
+```{r}
+cat("non-zero obs:",sum(ds1$Balance > 0), "|", (sum(ds1$Balance > 0)/nrow(ds1))*100, "%")
+cat("\n")
+cat("zero obs:", sum(ds1$Balance == 0), "|", (sum(ds1$Balance == 0)/nrow(ds1))*100, "%")
+```
+
+36% of the observations were zero-balance, which is not critical, however it have to be considered while interpreting the model.
+Obviously, it is non-normal distribution. However, it is a large sample, so it does not matter so much.
+
+```{r}
+fig <- plot_ly(alpha = 0.6)
+fig <- fig %>% add_histogram(x = as.numeric(unlist((filter(ds1, ds1$Exited == 0))[2])), name = "Non-churned")
+fig <- fig %>% add_histogram(x = as.numeric(unlist((filter(ds1, ds1$Exited == 1))[2])), name = "Churned")
+fig <- fig %>% layout(barmode = "overlay", xaxis = list(title = 'Balance ($)'), title = "Balance Distribution")
+fig
+```
+
+This is a double histogram graph for Churned and Non-churned clients, as it can be seen within churned clients there are much less those who have zero-balance. 
+
+Also, let's assume that there is no zero-balance users, in this case, would the distribution be normal?
+
+```{r}
+check = (filter(ds1, ds1$Balance > 0))[2] %>% unlist() %>% as.numeric()
+plot_ly(x = check, type = "histogram") %>% layout(xaxis = list(title = 'Balance ($)'), title = "Balance Distribution")
+```
+
+```{r}
+qqnorm(check)
+```
+
+Indeed, excluding zero-balance observations the Balance distribution would be normal. So, an additional factor should be added.
+
+#### 3.1.3. IsActiveMember
+
+```{r}
+g <- ggplot(ds1, aes(as.logical(as.integer(IsActiveMember)-1))) + labs(title = "Distribution of Active Members", x = "Was an Active Member?")
+p <-  g + geom_bar(aes(fill = as.logical(as.integer(Exited)-1))) + guides(fill=guide_legend(title="Exited"))
+ggplotly(p)
+```
+Active and non-Active members are distributed quite similar, however in terms of churned and non-churned clients there is a big difference. Non-Active members include almost double amount of churned clients in comparison with Active members group.
+
+#### 3.1.4. HasCrCard
+
+```{r}
+g <- ggplot(ds1, aes(as.logical(as.integer(HasCrCard)-1))) + labs(title = "Distribution of Card Owners", x = "Had a Credit Card")
+p <-  g + geom_bar(aes(fill = as.logical(as.integer(Exited)-1))) + guides(fill=guide_legend(title="Exited"))
+ggplotly(p)
+```
+
+So, according to the bar plot there are much more clients who has Credit Card. Not much can be concluded about churned and non-churned distribution among owners and non-owners of Credit Card.
+
+#### 3.1.5. Geography (control)	
+
+```{r}
+g <- ggplot(ds1, aes(x = Geography)) + labs(title = "Geographical Distribution", x = "Country")
+p <-  g + geom_bar(aes(fill = as.logical(as.integer(Exited)-1))) + guides(fill=guide_legend(title="Exited"))
+ggplotly(p)
+```
+
+Half of the data is about clients from France, the other half is divided equally by Germany and Spain. In France and Germany there are similar quantity of clients that churned, but proportionally the country with the most amount of churned clients is Germany, the least amount is in Spain.
+
+#### 3.1.6. Age (control)
+
+```{r}
+fig <- plot_ly(alpha = 0.6)
+fig <- fig %>% add_histogram(x = as.numeric(unlist((filter(ds1, ds1$Exited == 0))[6])), name = "Non-churned")
+fig <- fig %>% add_histogram(x = as.numeric(unlist((filter(ds1, ds1$Exited == 1))[6])), name = "Churned")
+fig <- fig %>% layout(barmode = "overlay", xaxis = list(title = 'Age (years)'), title = "Age Distribution")
+fig
+```
+
+Most of the clients are people from 30 to 40 years old, however the churned clients are not in this range, which maybe an indicator of influence of age on exited in the future model. Most of the churned clients are people from 35 to 50.
+
+#### 3.1.7. Gender	(control)
+
+```{r}
+g <- ggplot(ds1, aes(Gender)) + labs(title = "Distribution of Gender", x = "Gender")
+p <-  g + geom_bar(aes(fill = as.logical(as.integer(Exited)-1))) + guides(fill=guide_legend(title="Exited"))
+ggplotly(p)
+```
+Major part of clients of the bank are men, however there are more woman who exit the bank (25% of women vs 16% of male)
+
+### 3.2. Relationship between independent and dependent variables (deeper)
+
+#### 3.2.1. Exited & Balance
+
+```{r}
+g = ggplot(ds1, aes(x = Exited, y = Balance)) + geom_boxplot()
+ggplotly(g)
+```
+On the graph it can be seen that there is no such visible difference in median, however the difference can be seen in first quartile of two boxes. So, it can be assumed that there is some relationship between variables.
+
+However, in 3.1.2 interesting pattern was found: if we remove all zero-balance clients from sample we will get a normal distribution, so let's divide the variable by two groups.
+
+##### 3.2.1.1 Non-Zero Balance & Exited
+
+```{r}
+ds2 = ds1 
+ds2= filter(ds2, Balance > 0)
+g = ggplot(ds2, aes(x = Exited, y = Balance)) + geom_boxplot()
+ggplotly(g)
+```
+
+As it can be seen the boxplot graph is much different from the first. Let us test independence using statistical test
+
+```{r}
+# F Test
+group0 = (filter(ds2, Exited == 0))[2] %>% unlist() %>% as.numeric()
+group1 = (filter(ds2, Exited == 1))[2] %>% unlist() %>% as.numeric()
+var.test(group0,group1, alternative = "two.sided")
+```
+
+The p-value of F-test is p = 0.3247 which is greater than the significance level 0.05. There is no significant difference between the two variances. As the sample is large normality assumption can be ignored => use unpaired t-test
+
+```{r}
+t.test(Balance ~ Exited ,data = ds2, alternative = "two.sided", var.equal = FALSE)
+```
+p-value>0.05 ==> the Balance of churned clients is not significantly different from the Balance of non-churned clients
+
+In conclusion, it can be assumed that there is no significant relationship between Balance and Exited if Balance is not zero.
+
+##### 3.2.1.2. Zero Balance & Exited
+
+Well, for this time boxplots will be useless since the value of variable balance is static and equals to zero for all of the observations. So, I will use another approach and create new binary variable which will be used as an indicator whether the client had zero balance or not. Then I will compute chi-square test of independency.
+
+```{r}
+ds2 = ds1 
+ds2$isZeroBalance = ifelse(ds2$Balance == 0, 1, 0)
+```
+
+```{r}
+ds2$isZeroBalance = as.logical(as.integer(ds2$isZeroBalance))
+g <- ggplot(ds2, aes(isZeroBalance)) + labs(title = "Distribution of Zero and Non-Zero Balance Clients")
+p <-  g + geom_bar(aes(fill = as.logical(as.integer(Exited)-1))) + 
+          guides(fill=guide_legend(title="Exited"))
+ggplotly(p) %>% layout(xaxis = list(title = 'Is client has Zero Balance'))
+```
+
+
+NON-Zero Balance clients includes three times more churned clients in absolute numbers than Zero balance clients or 24% churned in NON-Zero Balance group against 13.8% churned in Zero balance group. Testing it with chi-square test of independency.
+
+H0: isZeroBalance is independent of Exited
+H1: isZeroBalance is not independent of Exited
+
+```{r}
+contingency = table(ds2$Exited, ds2$isZeroBalance) 
+chisq.test(contingency)
+```
+
+p-value<0.05 ==> isZeroBalance may not be independent of Exited
+
+In conclusion, it can be assumed that there is a significant relationship between isZeroBalance and Exited. So, this variable will be included into dataset.
+
+```{r}
+ds1$isZeroBalance = ifelse(ds1$Balance == 0, 1, 0) %>% as.factor()
+```
+
+#### 3.2.2. Exited & IsActiveMember
+
+H0: IsActiveMember is independent of Exited
+H1: IsActiveMember is not independent of Exited
+
+```{r}
+contingency = table(ds1$Exited, ds1$IsActiveMember) 
+chisq.test(contingency)
+```
+
+p-value<0.05 ==> IsActiveMember may not be independent of Exited
+
+#### 3.2.3. Exited & HasCrCard
+
+H0: HasCrCard is independent of Exited
+H1: HasCrCard is not independent of Exited
+
+```{r}
+contingency = table(ds1$Exited, ds1$HasCrCard) 
+chisq.test(contingency)
+```
+
+p-value>0.05 ==> HasCrCard is independent of Exited
+
+#### 3.2.4. Exited & Geography
+
+H0: Geography is independent of Exited
+H1: Geography is not independent of Exited
+
+```{r}
+contingency = table(ds1$Exited, ds1$Geography) 
+chisq.test(contingency)
+```
+
+p-value<0.05 ==> Geography may not be independent of Exited
+
+#### 3.2.5. Exited & Age
+
+```{r}
+g = ggplot(ds1, aes(x = Exited, y = Age)) + geom_boxplot()
+ggplotly(g)
+```
+
+So, median differs from group to group quite visibly, so it can be assumed that there is a relationship between two variables. 
+
+#### 3.2.6. Exited & Gender
+
+H0: Gender is independent of Exited
+H1: Gender is not independent of Exited
+
+```{r}
+contingency = table(ds1$Exited, ds1$Gender) 
+chisq.test(contingency)
+```
+
+p-value<0.05 ==> Gender may not be independent of Exited
+
+
+### 3.4 Summary of Descriptive Statistics.
+1. Most of the observations are about non-churned client (80%)
+2. Interesting Pattern occurs in Balance variable: it is normally distributed only because of the zeroes. Further research of the relationship between the dependent variable and Balance shows:
+    + 2a. That it can be assumed that there is no significant relationship between non-zero balance and exited.  
+    + 2b. That it can be assumed that there is a significant relationship between zero balance and exited.  
+  However, I will include both Balance and isZeroBalance variables into the model to test assumptions that was made during the exploratory analysis
+3. HasCrCard turned out to be indepedent of Exited.
+4. IsActiveMember tends to be one of the most influential factors (presumably).
+5. Age & Gender are also seem to be influential factors. 
+6. No inital expectation on level of influence for Geography variable.
+
+Now, finally to the model creation.
+
+## 4. Models
+### 4.1 Whether to use Balance or isZeroBalance
+
+Firstly, I will create two models with just one independent variable to decide whether to use Balance or isZeroBalance variable. Both of them cannot be used because they highly correlated initially which will lead to multicollinearity problem in the model.
+
+```{r}
+blr_a = glm(Exited ~ Balance , data = ds1, family = "binomial")
+summary(blr_a)
+```
+
+Estimate for Balance is too low to be really influential.
+
+```{r}
+blr_b = glm(Exited ~ isZeroBalance , data = ds1, family = "binomial")
+summary(blr_b)
+```
+
+Binary variable have estimate -0.68 which tells that isZeroBalance is more influential than Balance
+
+So, by summaries of two model the second model is better in terms of AIC (9971 in model 1 and 9957 in model 2, the lower the AIC the better the model). Consider comparison with compareGLM function.
+
+```{r}
+compareGLM(blr_a, blr_b)
+```
+
+All values states that it is better to use isZeroBalance as variable.
+
+### 4.2. Nested Models
+
+I will create 5 models:
+1. The first one will include only two the most influential (according to the assumptions in exploratory analysis in previous part) variables:
+
+```{r}
+model1 = glm(Exited ~ isZeroBalance + IsActiveMember, data = ds1, family = "binomial")
+summary(model1)
+```
+
+2. The second one will include all of the variables from model1 and also Age
+
+```{r}
+model2 = glm(Exited ~ isZeroBalance + IsActiveMember + Age , data = ds1, family = "binomial")
+summary(model2)
+```
+
+3. The third model will include all of the variables from model2 and also Geography
+
+```{r}
+model3 = glm(Exited ~ isZeroBalance + IsActiveMember + Age + Geography , data = ds1, family = "binomial")
+summary(model3)
+```
+4. The forth one will include all of the variables from model3 and also Gender
+
+```{r}
+model4 = glm(Exited ~ isZeroBalance + IsActiveMember + Age + Geography + Gender , data = ds1, family = "binomial")
+summary(model4)
+```
+
+5. The fith model will include all of the variables from model4 and also HasCrCard
+
+```{r}
+model5 = glm(Exited ~ isZeroBalance + IsActiveMember + Age + Geography + Gender + HasCrCard, data = ds1, family = "binomial")
+summary(model5)
+```
+### 4.3. Model Comparison
+
+```{r message=F}
+tab_model(model1, model2, model3, model4, model5, 
+          show.aic = T, show.loglik = T,
+          dv.labels = c('model1', 'model2', 'model3', 'model4', 'model5'))
+```
+Comparison:
+1. Pseudo R2 (R2 Tjur)
+  The best model - model4/model5 (since it has the higher r2)
+2. AIC 
+  The best model - model4 or model2 (since they has the lowest value of AIC)
+3. Log-Likelihood
+  The best model - model5 (since it has higher log-Likelihood)
+
+So, choosing between model4 and model5. Comparing them by ANOVA (analysis of deviance)
+
+```{r}
+anova(model4, test ="Chisq")
+```
+
+```{r}
+anova(model5, test ="Chisq")
+```
+
+```{r}
+anova(model4,model5, test ="Chisq")
+```
+
+The null deviance tells us how well the response variable can be predicted by a model with only an intercept term. And HasCrCard really poorly predicts the Exited, moreover its effect is insignificant. 
+
+Although, the function from rcompanion library has slightly more detailed results.
+```{r}
+compareGLM(model4, model5)
+```
+Comparison:
+1. Pseudo R2 
+  The best model - model5 (since it has the higher r2)
+2. AIC 
+  The best model - model4 (since it has the lowest value of AIC)
+3. BIC
+  The best model - model4 (since it has lower BIC)
+
+So, in terms of Explained Variance model5 is better, but in terms of AIC and BIC (indicate a better balance of goodness-of-fit of the model and the complexity of the model) model4 is better. So, model4.
+
+A well-fitting model shows no significant difference between the model and the observed data
+ - Hosmer and Lemeshow test
+
+```{r}
+logitgof(ds1$Exited, fitted(model4), g = 10) #g should be larger than the number of predictors; df = g - 2
+```
+For model4 there is not enough evidence to say it is a poor fit.
+
+```{r}
+summary(model4)
+```
+
+The only non-significant predictor is GeographySpain
+
+*isZeroBalance1* - the log of odds ratio for people with zero balance will be lower by 0.39 in comparison with non-zero balance group 
+*IsActiveMember1* - the log of odds ratio for customers who are active members of the bank will be lower by 1 in comparison with non-active members
+*Age* - With increase on 1 in Age variable the log of odds will increase on 0.07
+*GeographyGermany* - the log of odds ratio for customers from Germany will be higher by 0.7 in comparison with clients from France
+*GeographySpain* - the log of odds ratio for customers from Spain will be higher by 0.03 in comparison with clients from France
+*GenderMale* - the log of odds ratio for customers with male gender will be higher by 0.5 in comparison with female customers
+
+## 5. ROC Analysis
+
+```{r}
+# Splitting the data
+ds3 = ds1[,-2]
+set.seed(1)
+
+# using 70% of ds as training set and 30% as test set
+sample = sample(c(TRUE, FALSE), nrow(ds3), replace=TRUE, prob=c(0.7,0.3))
+train  = ds3[sample, ]
+test   = ds3[!sample, ]
+
+# Creating ROC Curve Plot
+
+model4a = glm(Exited ~ isZeroBalance + IsActiveMember + Age + Geography + Gender , data = train, family = "binomial")
+test_prob4 = predict(model4a, newdata = test, type = "response")
+test_roc4 = roc(test$Exited ~ test_prob4, plot = TRUE, print.auc = TRUE)
+```
+
+So, as it can be seen by the ROC plot the model is quite good. It is not an amazing prediction quality, but the model is far away (AUC = 0.765) from the baseline (AUC = 0.5). 
+
+## 6. Plotting Predicted Probabilities
+
+There would not be much description, since the plots tell all. The general thing: these plots are about how different level of certain factors affect the slope of predicted probabilities of continuous variable Age.
+
+```{r}
+plot_model(model4, type = "pred", terms = c("Age", "Geography"))
+```
+
+
+```{r}
+plot_model(model4, type = "pred", terms = c("Age", "Gender"))
+```
+
+```{r}
+plot_model(model4, type = "pred", terms = c("Age", "IsActiveMember"))
+```
+IsActiveMember has the most visible differences between two slopes
+
+```{r}
+plot_model(model4, type = "pred", terms = c("Age", "isZeroBalance"))
+```
+
+## 7. Leverage Effect Tests
+
+```{r}
+outlierTest(model4)
+```
+
+Outlier test suggests that observation 2142 is outlier.
+
+```{r}
+influenceIndexPlot(model4)
+```
+
+According to diagnostic plots, it can be assumed that:
+observations 6444 and 9573 are outliers by cook's distance,
+observations 2141 and 9573 are outliers by studentized residuals,
+observations 2459 and 3995 are outliers by hat-values
+
+```{r}
+influencePlot(model4, col = "red")
+```
+
+According to influenceplot it can be assumed that observations 2142, 2459, 3995, 6444, 9573 are outliers.
+
+```{r}
+vif(model4)
+```
+
+Values are ~ 1 -> there is no multicollinearity
+
+## 8. Model Editing
+
+```{r}
+model4fix <- update(model4, subset = c(-2142,-2459,-3995,-6444,-9573))
+```
+
+```{r}
+compareCoefs(model4, model4fix)
+```
+
+No coefficients change significantly, none of them changes significance level.
+
+There are no changes in the sign or magnitude of coefficients, which means there is no need to exclude any observations from model 4.
+
+
+## 9. Results
+So, about the hypotheses:
+
+1. People with a higher balance in their accounts are less likely to stop using the bank services compared to those with lower balances - FALSE, however the balance factor is worse predictor in comparison with isZeroBalance (that divides clients by two groups according to their balance), isZeroBalance shows that people with non-zero balance are more likely to churn
+
+2. The most active customers will be less likely to stop using the bank services - TRUE - Most active customers are less likely to churn, while People with higher balance tend to churn 
+
+3. People with a credit card are less likely to stop using the bank services - FALSE - The presence or absence of a credit card among bank clients does not in any way determine their likelihood of stopping using the bank’s services.
+
+Age, Geography, Gender are significant predictors of churn
+
+RQ: Which categories of client data would influence the churn of the bank client?  
+The answer: Age, Geography, Gender, isZeroBalance and isActiveMember
