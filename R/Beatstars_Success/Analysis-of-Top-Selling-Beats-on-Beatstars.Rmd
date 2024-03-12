@@ -1,0 +1,545 @@
+---
+title: "Analysis of Top Selling Beats on Beatstars"
+author: "Timur Sharifullin"
+date: '2022-10-11'
+output: 
+  html_document:
+    theme: cosmo
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(stringr)
+library(psych)
+library(ggplot2)
+library(plotly)
+library(gridExtra)
+library(knitr)
+library(car)
+knitr::opts_chunk$set(message= F, warning=F)
+options(scipen = 999)
+
+df_beats = read.csv("df_beats.csv")
+df_producers = read.csv("df_producers.csv")
+```
+
+# Beatstars Top Chart Analysis: How to be a successful producer?
+
+## Intro
+
+<center>
+![](C:/Users/timur/OneDrive/Documents/R Studio Tasks/CV/03. Beatstars Success - Linear Regression/beatstars.jpg)
+</center>
+
+beatstars.com is the World's #1 marketplace to buy & sell beats. Every day, producers who post their beats on this platform are looking for more and more ways to promote, as they are constantly in the huge competition of the global market. It became interesting for me to study the main features of the beats that are currently in the top-selling chart of the platform, so I decided to web-scrape Beatstars top-selling beats info and producers info.
+
+The process of web scraping was done by RSelenium and was divided to stages:
+Stage 1 - processing the chart itself ("https://www.beatstars.com/top-charts"). In the result I receive a dataset that consists of beat title, producer name, place of beat in the chart and links to presented beats and producers
+Stage 2 - loop function through every beat page to collect beat info
+Stage 3 - loop function through every producer page to collect producer stats
+
+As the result I have two datasets:
+"df_beats" contains information about beats (such stats as likes, reposts, plays and such factors as price, bpm, key, etc.)
+"df_producers" contains stats about producers whose beats are presented in the chart
+But still these datasets need Preprocessing to work with them. 
+
+So, the goal of that work is to receive some insights about factors of success on Beatstars. I would like to analyze the correlation and maybe even try to create a model of prediction of success.
+
+## Cleaning the Dataset
+
+```{r warning=F}
+# Fix some errors
+df_beats[364,1] = 362
+
+# Deleting Track that been brought to chart due to advertisment
+df_beats1 = subset(df_beats, place!="-")
+
+# Change class of place
+df_beats1$place = as.numeric(df_beats1$place)
+
+# Remove technical variables
+df_beats1 = dplyr::select(df_beats1,-beat_href)
+
+# Change k to thousands and M to millions
+df_beats1$beat_like_k = str_detect(df_beats1$beat_like,"k")
+df_beats1$beat_like = str_remove_all(df_beats1$beat_like,"k") %>% as.numeric()
+df_beats1$beat_like = ifelse(df_beats1$beat_like_k==T,df_beats1$beat_like*1000,df_beats1$beat_like)
+df_beats1 = dplyr::select(df_beats1,-beat_like_k)
+
+df_beats1$beat_repost_k = str_detect(df_beats1$beat_repost,"k")
+df_beats1$beat_repost = str_remove_all(df_beats1$beat_repost,"k") %>% as.numeric()
+df_beats1$beat_repost = ifelse(df_beats1$beat_repost_k==T,df_beats1$beat_repost*1000,df_beats1$beat_repost)
+df_beats1 = dplyr::select(df_beats1,-beat_repost_k)
+
+df_beats1$beat_plays_k = str_detect(df_beats1$beat_plays,"k")
+df_beats1$beat_plays_m = str_detect(df_beats1$beat_plays,"M")
+df_beats1$beat_plays = str_remove_all(df_beats1$beat_plays,"k")  
+df_beats1$beat_plays = str_remove_all(df_beats1$beat_plays,"M") %>%  
+  as.numeric()
+df_beats1$beat_plays = ifelse(df_beats1$beat_plays_k==T,df_beats1$beat_plays*1000,
+                              ifelse(df_beats1$beat_plays_m==T, df_beats1$beat_plays*1000000,df_beats1$beat_plays))
+df_beats1 = dplyr::select(df_beats1,-beat_plays_k,-beat_plays_m)
+
+# Change date format
+library(lubridate)
+df_beats1$beat_date=mdy(df_beats1$beat_date)
+
+# Remove $ signs
+df_beats1$license1_price = gsub('[$]','',df_beats1$license1_price) %>% as.numeric()
+df_beats1$license2_price = gsub('[$]','',df_beats1$license2_price) %>% as.numeric()
+df_beats1$license3_price = gsub('[$]','',df_beats1$license3_price) %>% as.numeric()
+df_beats1$license4_price = gsub('[$]','',df_beats1$license4_price) %>% as.numeric()
+df_beats1$license5_price = gsub('[$]','',df_beats1$license5_price) %>% as.numeric()
+df_beats1$license6_price = gsub('[$]','',df_beats1$license6_price) %>% as.numeric()
+```
+
+```{r}
+# Additional features of naming
+## Does beat_title include info about price
+df_beats1$beat_title_price = str_detect(df_beats1$beat_title,"[$]")
+
+## Does beat_title include info about special offer
+df_beats1$beat_title_offer = str_detect(str_to_lower(df_beats1$beat_title),"buy")
+
+## Does beat_title include info about type of beat
+df_beats1$beat_title_type = str_detect(str_to_lower(df_beats1$beat_title),"type")
+
+# License Prices
+## MP3
+df_beats1$mp3_1 = ifelse(is.na(df_beats1$license1_type)==T, 0, ifelse(df_beats1$license1_type=="MP3", 1, 0)) %>% as.numeric()
+df_beats1$mp3_2 = ifelse(is.na(df_beats1$license2_type)==T, 0, ifelse(df_beats1$license2_type=="MP3", 1, 0)) %>% as.numeric()
+df_beats1$mp3_3 = ifelse(is.na(df_beats1$license3_type)==T, 0, ifelse(df_beats1$license3_type=="MP3", 1, 0)) %>% as.numeric()
+df_beats1$mp3_4 = ifelse(is.na(df_beats1$license4_type)==T, 0, ifelse(df_beats1$license4_type=="MP3", 1, 0)) %>% as.numeric()
+df_beats1$mp3_5 = ifelse(is.na(df_beats1$license5_type)==T, 0, ifelse(df_beats1$license5_type=="MP3", 1, 0)) %>% as.numeric()
+df_beats1$mp3_6 = ifelse(is.na(df_beats1$license6_type)==T, 0, ifelse(df_beats1$license6_type=="MP3", 1, 0)) %>% as.numeric()
+df_beats1$isonemp3 = rowSums(df_beats1[,c("mp3_1", "mp3_2", "mp3_3", "mp3_4", "mp3_5", "mp3_6")])
+
+df_beats1$MP3 = ifelse(df_beats1$isonemp3==0, NA, 
+                       ifelse(df_beats1$mp3_1==1,df_beats1$license1_price,
+                              ifelse(df_beats1$mp3_2==1,df_beats1$license2_price,
+                                     ifelse(df_beats1$mp3_3==1,df_beats1$license3_price,
+                                            ifelse(df_beats1$mp3_4==1,df_beats1$license4_price,
+                                                   ifelse(df_beats1$mp3_5==1,df_beats1$license5_price,
+                                                          df_beats1$license6_price)
+                                                   )
+                                            )
+                                     )
+                              )
+                       )
+
+## WAV
+df_beats1$wav_1 = ifelse(is.na(df_beats1$license1_type)==T, 0, ifelse(df_beats1$license1_type=="MP3 AND WAV", 1, 0)) %>% as.numeric()
+df_beats1$wav_2 = ifelse(is.na(df_beats1$license2_type)==T, 0, ifelse(df_beats1$license2_type=="MP3 AND WAV", 1, 0)) %>% as.numeric()
+df_beats1$wav_3 = ifelse(is.na(df_beats1$license3_type)==T, 0, ifelse(df_beats1$license3_type=="MP3 AND WAV", 1, 0)) %>% as.numeric()
+df_beats1$wav_4 = ifelse(is.na(df_beats1$license4_type)==T, 0, ifelse(df_beats1$license4_type=="MP3 AND WAV", 1, 0)) %>% as.numeric()
+df_beats1$wav_5 = ifelse(is.na(df_beats1$license5_type)==T, 0, ifelse(df_beats1$license5_type=="MP3 AND WAV", 1, 0)) %>% as.numeric()
+df_beats1$wav_6 = ifelse(is.na(df_beats1$license6_type)==T, 0, ifelse(df_beats1$license6_type=="MP3 AND WAV", 1, 0)) %>% as.numeric()
+df_beats1$isonewav = rowSums(df_beats1[,c("wav_1", "wav_2", "wav_3", "wav_4", "wav_5", "wav_6")])
+
+df_beats1$WAV = ifelse(df_beats1$isonewav==0, NA, 
+                       ifelse(df_beats1$wav_1==1,df_beats1$license1_price,
+                              ifelse(df_beats1$wav_2==1,df_beats1$license2_price,
+                                     ifelse(df_beats1$wav_3==1,df_beats1$license3_price,
+                                            ifelse(df_beats1$wav_4==1,df_beats1$license4_price,
+                                                   ifelse(df_beats1$wav_5==1,df_beats1$license5_price,
+                                                          df_beats1$license6_price)
+                                                   )
+                                            )
+                                     )
+                              )
+                       )
+df_beats1 = dplyr::select(df_beats1, -mp3_1, -mp3_2, -mp3_3, -mp3_4, -mp3_5, -mp3_6, -isonemp3,
+                   -wav_1, -wav_2, -wav_3, -wav_4, -wav_5, -wav_6, -isonewav)
+df_beats1 = dplyr::select(df_beats1, 
+                   -license1_price, -license2_price, -license3_price, -license4_price, -license5_price, -license6_price,
+                   -license1_type, -license2_type, -license3_type, -license4_type, -license5_type, -license6_type)
+```
+
+
+```{r}
+# Remove technical variables
+df_producers1 = dplyr::select(df_producers, -unique.author_href.)
+
+# Renaming of columns
+colnames(df_producers1) <-  c("author_name", "author_followers", "author_plays", "author_n_tracks")
+
+# Change k to thousands and M to millions
+## author_followers
+df_producers1$author_followers_k = str_detect(df_producers1$author_followers,"k")
+df_producers1$author_followers_m = str_detect(df_producers1$author_followers,"M")
+df_producers1$author_followers = str_remove_all(df_producers1$author_followers,"k")  
+df_producers1$author_followers = str_remove_all(df_producers1$author_followers,"M") %>%  
+  as.numeric()
+df_producers1$author_followers = ifelse(df_producers1$author_followers_k==T,df_producers1$author_followers*1000,
+                              ifelse(df_producers1$author_followers_m==T, df_producers1$author_followers*1000000,df_producers1$author_followers))
+df_producers1 =dplyr:: select(df_producers1,-author_followers_k,-author_followers_m)
+
+## author_plays
+df_producers1$author_plays_k = str_detect(df_producers1$author_plays,"k")
+df_producers1$author_plays_m = str_detect(df_producers1$author_plays,"M")
+df_producers1$author_plays = str_remove_all(df_producers1$author_plays,"k")  
+df_producers1$author_plays = str_remove_all(df_producers1$author_plays,"M") %>%  
+  as.numeric()
+df_producers1$author_plays = ifelse(df_producers1$author_plays_k==T,df_producers1$author_plays*1000,
+                              ifelse(df_producers1$author_plays_m==T, df_producers1$author_plays*1000000,df_producers1$author_plays))
+df_producers1 = dplyr::select(df_producers1,-author_plays_k,-author_plays_m)
+
+## author_n_tracks
+df_producers1$author_n_tracks_k = str_detect(df_producers1$author_n_tracks,"k")
+df_producers1$author_n_tracks_m = str_detect(df_producers1$author_n_tracks,"M")
+df_producers1$author_n_tracks = str_remove_all(df_producers1$author_n_tracks,"k")  
+df_producers1$author_n_tracks = str_remove_all(df_producers1$author_n_tracks,"M") %>%  
+  as.numeric()
+df_producers1$author_n_tracks = ifelse(df_producers1$author_n_tracks_k==T,df_producers1$author_n_tracks*1000,
+                              ifelse(df_producers1$author_n_tracks_m==T, df_producers1$author_n_tracks*1000000,df_producers1$author_n_tracks))
+df_producers1 = dplyr::select(df_producers1,-author_n_tracks_k,-author_n_tracks_m)
+
+```
+
+```{r}
+# Joining datasets into the final one
+df_beatstars_top = merge(df_beats1, df_producers1, by="author_name")
+
+# Delete all useless elements from Global Env
+rm(df_beats, df_beats1, df_producers, df_producers1)
+```
+
+## Data Preparation
+
+```{r}
+# As there are a lot of NAs in beat_key and this variable is not considered to be a good predictor - remove beat_key
+# and also beat_title and author_name since there are useless now
+df_beatstars_top1 = df_beatstars_top %>% dplyr::select(-beat_key,-author_name,-beat_title)
+
+
+# Also, a lot of beats does not have MP3 price, so this variable also will be removed
+# but it will be done after descriptive statistics part 
+
+# The dependent variable is ranking data with 300+ ranks, so it is hard to choose an appropriate stat model
+# Therefore the success coefficient will be made. 
+# It falls inside 0 to 1, so the linear regression could be used
+
+df_beatstars_top1$success = ((max(df_beatstars_top1$place) - df_beatstars_top1$place + 1)-0.5) / nrow(df_beatstars_top1)
+
+df_beatstars_top1 = df_beatstars_top1 %>% dplyr::select(-place)
+```
+
+## Descriptive Statistics
+
+### Beat Naming
+
+Beat is an audio content and not much visual or descriptive can be very used to promote the beat. That is why producers add some features to the title of the beat. These features can offer some beat bundles (Buy N Get N Free) or  highlight the low price or just describe the style of the bear (Kid Laroi Type Beat). I am interesting in how really this changes the selling dynamics, so how much beats in top chart have these features. 
+
+#### Highlighting the Price
+
+```{r}
+ggplot(df_beatstars_top1, aes(x=beat_title_price, fill = beat_title_price)) +
+  geom_bar(show.legend = FALSE) +
+  labs(title = "How many beats has price tag in the title?", x="Price in the Title")
+```
+
+Most of the producers do not use this feature - not enough observations where beat_title_price == TRUE to test if beat_title_price is related to success of the beat.
+
+#### Special Offer
+
+```{r}
+p1 = ggplot(df_beatstars_top1, aes(x=beat_title_offer, fill = beat_title_offer)) +
+  geom_bar(show.legend = FALSE) +
+  labs(title = "How many beats has\nspecial offer in the title?") +
+  theme(
+    axis.title.x = element_blank()
+  )
+
+p2 = ggplot(df_beatstars_top1, aes(x=beat_title_offer, y = success, fill = beat_title_offer)) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(y = "Success Points", title = "\nHow successful are the beats?") +
+  theme(
+    axis.title.x = element_blank()
+  )
+
+grid.arrange(p1, p2,
+             widths = c(1, 2),
+             bottom = "Offer in the Title")
+```
+
+Some of the producers use this feature, but there are less than a quarter of beats that has special offer in the title.
+
+Judging by the boxplot, offer in the title is not related to the success.
+
+
+#### Type Beat
+
+```{r}
+p1 = ggplot(df_beatstars_top1, aes(x = beat_title_type, fill = beat_title_type)) +
+  geom_bar(show.legend = FALSE) +
+  labs(title = "How many beats has\ntype in the title?") +
+  theme(
+    axis.title.x = element_blank()
+  )
+
+p2 = ggplot(df_beatstars_top1, aes(x=beat_title_type, y = success, fill = beat_title_type)) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(y = "Success Points", title = "\nHow successful are the beats?") +
+  theme(
+    axis.title.x = element_blank()
+  )
+
+grid.arrange(p1, p2,
+             widths = c(1, 2),
+             bottom = "Type in the Title")
+```
+
+It seems that the most used feature is to name the type of beat in the title.
+
+Judging by the boxplot, type in the title could be related to the success, so testing it with 
+
+```{r}
+shapiro.test(df_beatstars_top1$success) # the DV distribution is not normal
+
+leveneTest(df_beatstars_top1$success ~ df_beatstars_top1$beat_title_type) # p>0.05 -> variances are homogeneous
+
+t.test(df_beatstars_top1$success ~ df_beatstars_top1$beat_title_type, var.equal = T) 
+
+```
+
+P-value is a little bit more than 0.05, so there is no sufficient evidence that there is a difference between two groups in terms of success.
+
+#### Beat Date of Publishing
+How many old and new beats are in the chart? Can the beat be relevant in several years from publishing?
+
+```{r}
+ggplot(df_beatstars_top1, aes(x=beat_date)) +
+  geom_histogram(bins = 70) +
+  labs(x="Date of Publishing")
+
+
+cat("Correlation coef:", cor(as.numeric(df_beatstars_top1$beat_date),df_beatstars_top1$success))
+```
+
+As expected, most of the beats were published recently, however beats from last year or even from 2020 still can be seen in the top chart. In terms of relationship between success and date of publishing - there is none.
+
+### Beat Stats
+
+How many likes, reposts and plays the beat in the top chart usually have?
+
+#### Likes
+```{r}
+describe(df_beatstars_top1$beat_like)
+
+density <- density(df_beatstars_top1$beat_like)
+
+fig <- plot_ly(x = ~density$x, y = ~density$y, type = 'scatter', mode = 'lines', fill = 'tozeroy')
+fig <- fig %>% layout(xaxis = list(title = 'Likes'),
+         yaxis = list(title = 'Density'))
+
+fig
+
+cat("Correlation coef:", cor(df_beatstars_top1$beat_like,df_beatstars_top1$success))
+```
+
+Mean=2114, however median = 737, and as it can be seen on graph there are very small amount of beats that has more than 5k likes.
+
+Success and number of likes on the beat are moderately correlated.
+
+#### Reposts
+
+```{r}
+describe(df_beatstars_top1$beat_repost)
+
+density <- density(df_beatstars_top1$beat_repost)
+
+fig <- plot_ly(x = ~density$x, y = ~density$y, type = 'scatter', mode = 'lines', fill = 'tozeroy')
+fig <- fig %>% layout(xaxis = list(title = 'Reposts'),
+         yaxis = list(title = 'Density'))
+
+fig
+
+cat("Correlation coef:", cor(df_beatstars_top1$beat_repost,df_beatstars_top1$success))
+```
+
+Mean = 35, Median = 10, the dynamics is really similar to Likes
+
+Success and number of reposts on the beat are moderately correlated, it is only a little less than in case of likes. 
+
+#### Plays
+```{r}
+describe(df_beatstars_top1$beat_plays)
+
+density <- density(df_beatstars_top1$beat_plays)
+
+fig <- plot_ly(x = ~density$x, y = ~density$y, type = 'scatter', mode = 'lines', fill = 'tozeroy')
+fig <- fig %>% layout(xaxis = list(title = 'Plays'),
+         yaxis = list(title = 'Density'))
+
+fig
+
+cat("Correlation coef:", cor(df_beatstars_top1$beat_plays,df_beatstars_top1$success))
+```
+
+Mean = 112 thousands, median = 31400, the distribution is close to the likes and reposts
+
+Success and number of plays on the beat are moderately correlated, as well as likes and success.
+
+### Prices
+
+Common practice is to have different type of licenses for beat purchasing. For one price artist can only use it in non-commercial purposes, for another can have full rights on using beats. Licensing method is always changing in some way, but probably the most common two formats of a beat are MP3(non-tagged) and WAV. So, I am interesting in analyzing the prices among top chart of Beatstars on this two positions
+
+```{r}
+describe(na.omit(df_beatstars_top1$MP3))
+describe(na.omit(df_beatstars_top1$WAV))
+
+fig1 <- plot_ly(alpha = 0.8)
+fig1 <- fig1 %>% add_trace(x = df_beatstars_top1$MP3,
+  type='histogram',
+  name="MP3 Prices(US $)"
+) 
+fig1 <- fig1 %>% add_trace(x = df_beatstars_top1$WAV,
+  type='histogram',
+  name="WAV Prices(US $)"
+) 
+fig1 <- fig1 %>%
+  layout(
+    xaxis = list(
+      dtick = 10, 
+      tick0 = 0, 
+      tickmode = "linear"
+  ))
+fig1 <- fig1 %>% layout(barmode = "overlay")
+fig1
+
+```
+
+Mean Price for MP3 = 29.93 USD, while median = 29.99 USD.
+Mean Price for WAV = 46.27 USD, while median = 49.95 USD.
+
+So, approximately, WAV version is more expensive than MP3 by 15 to 20 dollars. Also, it can be seen that producers just copy the most appropriate price for the licences, so it is a common thing to have mp3 price = 30 USD and WAV price=50 USD.
+
+
+### Producer Stats
+
+How many plays, followers and tracks the producer in the top chart usually have?
+
+#### Plays
+
+```{r}
+describe(df_beatstars_top1$author_plays)
+
+density <- density(df_beatstars_top1$author_plays)
+
+fig <- plot_ly(x = ~density$x, y = ~density$y, type = 'scatter', mode = 'lines', fill = 'tozeroy')
+fig <- fig %>% layout(xaxis = list(title = 'Plays'),
+         yaxis = list(title = 'Density'))
+
+fig
+
+cat("Correlation coef:", cor(df_beatstars_top1$author_plays,df_beatstars_top1$success))
+```
+
+Mean=2.9M, median =1M. Success and number of plays of the author are not correlated.
+
+#### Followers
+
+```{r}
+describe(df_beatstars_top1$author_followers)
+
+density <- density(df_beatstars_top1$author_followers)
+
+fig <- plot_ly(x = ~density$x, y = ~density$y, type = 'scatter', mode = 'lines', fill = 'tozeroy')
+fig <- fig %>% layout(xaxis = list(title = 'Followers'),
+         yaxis = list(title = 'Density'))
+
+fig
+
+cat("Correlation coef:", cor(df_beatstars_top1$author_followers,df_beatstars_top1$success))
+```
+
+Mean = 49705, Median = 20700, the dynamics is really similar to Likes. Success and number of followers of the author are not correlated.
+
+#### Number of Available Beats
+
+```{r}
+describe(df_beatstars_top1$author_n_tracks)
+
+density <- density(df_beatstars_top1$author_n_tracks)
+
+fig <- plot_ly(x = ~density$x, y = ~density$y, type = 'scatter', mode = 'lines', fill = 'tozeroy')
+fig <- fig %>% layout(xaxis = list(title = 'Number of Available Beats'),
+         yaxis = list(title = 'Density'))
+
+fig
+
+cat("Correlation coef:", cor(df_beatstars_top1$author_n_tracks,df_beatstars_top1$success))
+```
+
+The collection of available beats should be huge for top sellers, so it is about experience. Success and number of tracks of the author are not correlated.
+
+
+## Regression Analysis
+
+The dependent variable is "Success" coef. It is continuous and falls inside 0 to 1, so linear regression model could be used. 
+
+```{r}
+# remove MP3 Price variable - a lot of NAs
+df_beatstars_top2 = df_beatstars_top1 %>% dplyr::select(-MP3) %>% na.omit()
+
+df_beatstars_top2$beat_date = as.numeric(df_beatstars_top2$beat_date)
+```
+
+### Correlations between the IVs
+
+```{r}
+library(sjPlot)
+tab_corr(df_beatstars_top2[,-c(6:8)], corr.method = "spearman")
+```
+
+The success is only correlated with beat_like, beat_repost, beat_plays and beat_bpm, however beat_like, beat_repost, beat_plays are highly correlated variables, so I will choose only beat_like and beat_bpm as a predictors in the model.
+
+### Model Assumptions (diagnostics)
+```{r}
+# model 1
+m1 = lm(success ~ beat_like + beat_bpm, data = df_beatstars_top1)
+
+# check assumptions m1
+layout(matrix(c(1,2,3,4),2,2)) 
+plot(m1)
+cat("Assumptions of model 1 are violated, but it is not so bad")
+
+# outliers
+outlierTest(m1)
+cat("Model 1: no outliers")
+
+# influential points
+cutoff <- 4/((nrow(df_beatstars_top1)-length(m1$coefficients)-2)) 
+plot(m1, which=4, cook.levels=cutoff) 
+cat("Model 1: 180,263,17 are influential points")
+
+# Homoscedasticity Assumption
+ncvTest(m1) # assumption is not violated
+cat("Model 1: Homoscedasticity Assumption is not violated")
+
+# fix ds
+df_beatstars_top2 = df_beatstars_top1[-c(180,263,17),]
+
+# model 2
+m2 = lm(success ~ beat_like + beat_bpm, data = df_beatstars_top2)
+
+cat("Fixing model 1, the assumptions plot of fixed model")
+layout(matrix(c(1,2,3,4),2,2)) 
+plot(m2)
+cat("Quite okay right now")
+```
+
+### Model interpretation
+
+```{r}
+summary(m2)
+```
+
+16% of variance was explained by the model, which says that fit is okay for creative market and only 2 predictors.
+
+Both predictors are significant and have a positive relationship with success, however the effect is incredibly small for both of the predictors. 
+
+So, definitely, the more likes (or reposts or plays) on the beat and the more bpm of the beat the higher is the success of the beat, but the effect is barely noticeable.    
