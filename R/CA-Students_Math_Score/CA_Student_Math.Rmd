@@ -1,0 +1,236 @@
+---
+title: "Correspondence Analysis: Student's Math Scores"
+author: "Timur Sharifullin"
+date: "2023-02-20"
+output: 
+  html_document:
+    theme: cosmo
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+data = read.csv("StudentsPerformance.csv")
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, error = FALSE)
+```
+
+## Research Motivation
+
+There are many studies devoted to the search for predictors of a person's success in the educational process. A huge part of sociology is built on the study of such factors. However, in this "mini-study" as part of training in the use of a tool such as Correspondence Analysis, I had a desire to look at something less familiar, such as the relationship between what kind of lunch a student eats and whether he studied for an exam on the special test preparation course, and what the result he will get on the math test.
+
+## Description of the Dataset
+
+Students Performance in Exams dataset was taken from Kaggle platform (https://www.kaggle.com/datasets/spscientist/students-performance-in-exams). It contains many variables, but the following will be used in this work:
+- math.score (will be converted into categories)
+- lunch (standard & reduced)
+- test preparation course (none & completed)
+
+## Categorizing the math scores
+
+Let's divide the date into conditional categories according to the scores on the mathematical test. Looking at the histogram, you can see that the distribution is not so smooth, so you can see at what points the number of people clearly changes. 
+
+```{r}
+library(ggplot2)
+library(plotly)
+ggplot(data, aes(x=math.score)) + geom_histogram(bins=60) +
+  geom_vline(xintercept = 40, linetype = 2, color = "red") +
+  geom_vline(xintercept = 55, linetype = 2, color = "red") +
+  geom_vline(xintercept = 70, linetype = 2, color = "red") +
+  geom_vline(xintercept = 80, linetype = 2, color = "red") +
+  geom_vline(xintercept = 95, linetype = 2, color = "red")
+```
+
+So, after some prepartion we got such a contingency table
+
+```{r}
+library(dplyr)
+data$math.score_category = if_else(data$math.score < 40, "Math 0-40",
+                         if_else(data$math.score >= 40 & data$math.score < 55, "Math 40-55",
+                         if_else(data$math.score >= 55 & data$math.score < 70, "Math 55-70",
+                         if_else(data$math.score >= 70 & data$math.score < 80, "Math 70-80",
+                         if_else(data$math.score >= 80 & data$math.score < 95, "Math 80-95",
+                         "Math 95-100")))))
+
+# DF to CA format function
+
+to_ca_df = function(datta, main_variable){
+  colnames_vec = colnames(datta)
+  index_main_var = which(colnames(datta) == main_variable)
+  
+  fo = table(datta[,index_main_var]) %>% as.data.frame()
+  result_df = data.frame(first_one = fo[,1])
+  
+  result_colnames_vec = c(colnames(datta)[index_main_var])
+  
+  for(i in seq(1, length(colnames(datta)), 1)){
+    
+    if(i != index_main_var){
+      df = table(datta[,index_main_var],datta[,i]) %>% as.data.frame()
+      
+      for(k in seq(1, nrow(df)/length(unique(datta[,index_main_var])) , 1)){
+  
+        new = df[(1+length(unique(datta[,index_main_var]))*(k-1)):(length(unique(datta[,index_main_var]))+length(unique(datta[,index_main_var]))*(k-1)),3]
+        result_colnames_vec = append(result_colnames_vec,as.character(df[(1+length(unique(datta[,index_main_var]))*(k-1)),2]))
+        
+        result_df = cbind(result_df, new)
+      }
+  
+    } else {
+      next
+    }
+    
+  }
+
+  colnames(result_df) = result_colnames_vec
+  result_df
+}
+
+data2 = to_ca_df(data[,c(4,5,9)], main_variable = "math.score_category")
+
+math_mtrx = data2 %>% select(-"math.score_category") %>% as.matrix()
+row.names(math_mtrx) = data2$math.score_category
+
+math_mtrx
+```
+
+## Chi-squared test
+
+```{r}
+chisq.test(math_mtrx)
+```
+
+P-value is less than 0.05, so columns and rows are statistically significantly associated  
+
+### Diagnostics
+
+```{r}
+chisq.test(math_mtrx)$exp
+```
+
+Expected counts below 5 are not presented
+
+### Standard Residuals
+
+```{r}
+chisq.test(math_mtrx)$stdres
+```
+
+According to Standard Residuals, mainly students who eat reduced lunch score lower on a math test and who eat standard are much better in tests. The same can be said about the completion of an additional preparatory course - those who complete have more points than those who do not complete
+
+## Baloon Plot
+
+```{r}
+library(gplots)
+
+dt2 <- as.table(math_mtrx)
+balloonplot(
+  t(dt2),
+  main = "housetasks",
+  xlab = "",
+  ylab = "",
+  label = FALSE,
+  show.margins = FALSE
+)
+```
+
+Contingency table looks pretty boring. Most of the students did not complete the preparatory course, most of the students have a standard lunch. 
+
+Judging by the preliminary analysis of the data, it is unlikely that it will be possible to find any interesting connections, so far everything looks too predictable
+
+## Correspondence Analysis
+
+```{r}
+library(FactoMineR)
+res.ca = CA(math_mtrx, graph = F)
+```
+
+The data contains 6 rows and 4 columns
+
+If the data were random, the expected value of the eigenvalue for each axis would be 1/(nrow(math_mtrx)-1) = 1/5 = 20% in terms of rows.
+
+Likewise, the average axis should account for 1/(ncol(math_mtrx)-1) = 1/3 = 33.33% in terms of the 4 columns.
+
+
+```{r}
+library(factoextra)
+res.ca$eig
+fviz_screeplot(res.ca) +
+ geom_hline(yintercept = 33.33, linetype = 2, color = "red")
+```
+
+Amazing. In this case the first dimension explain almost all of the variance - 98.3%. The remaining 1.7% is explained by Dim2. Dimension 3 is so useless that it explains only 6.8*10^-30 percentage of variance. This means that two-dimensial representation of rows and columns would be perfect in terms of variance.
+
+### Biplot (Symmetric)
+
+By symmetric plot we only can make general conclusions.
+
+```{r}
+fviz_ca_biplot(res.ca, repel = TRUE)
+```
+Okay, probably this symmetric plot is not so easy to interpret. We can see that "95-100" category is really far away from other test scores categories - absolute champion of contribution to the Dim2. It is not possible to unambiguously associate this category of test scores with any factors using Symmetric Plot.
+
+"Math 70-80" relates to the completed test course, "Math 40-55" relates to free reduced lunch type. But I will give any deeper interpretation for now.
+
+### Quality of representation of row variables
+
+```{r}
+fviz_ca_row(res.ca, alpha.row = "cos2", repel = TRUE)
+library(corrplot)
+corrplot(res.ca$row$cos2, method = "number", is.corr = FALSE)
+```
+
+As it was expected, row items is perfectly represented not even by two dimensions, but by only Dim1. Least represented  by Dim1 (0.92 and 0.93) row items are "Math 70-80" and "Math 95-100", which was seen at the plot before. 
+
+### Contributions of rows to the dimensions
+
+```{r}
+corrplot(res.ca$row$contrib, is.corr = FALSE)
+fviz_contrib(res.ca, choice = "row", axes = 1, top = 10)
+fviz_contrib(res.ca, choice = "row", axes = 2, top = 10)
+fviz_contrib(res.ca, choice = "row", axes = 1:2, top = 10)
+fviz_ca_row(res.ca, col.row = "contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE)
+```
+
+On the first axis, we see that there are two opposites - a excellent score "85-90" and bad scores from 0 to 55 points. It is important to note that "Math 95-100" is not so significant for the Dim1, despite the fact that it is the highest score.
+
+It is interesting that test scores "80-95" and "95-100" make the main contribution to Dim2 despite the fact that they are so close in human terms. So, they are the variables that are most important in explaining the variability on Dim2. 
+
+It seems like test scores from 0 to 95 is explained in one way, but the scores from 95 to 100 is absolutely different story (It reminds me the difference between 0 to 8 and 8 to 10 scores in the HSE)
+
+### Quality of representation of column variables
+
+```{r}
+fviz_ca_col(res.ca, col.col = "cos2", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE)
+fviz_cos2(res.ca, choice = "col", axes = 1:2)
+```
+And again, as it was expected, all of the column items is represented perfectly (with 1.00 scores of cos2) on the two-dimensional map.
+
+### Asymmetric biplot
+
+"If the angle between two arrows is acute, then their is a strong association between the corresponding row and column.
+
+To interpret the distance between rows and and a column you should perpendicularly project row points on the column arrow."
+
+```{r}
+fviz_ca_biplot(res.ca, 
+               map ="rowprincipal", arrow = c(TRUE, TRUE),
+               repel = TRUE)
+fviz_ca_biplot(res.ca, 
+               map ="colprincipal", arrow = c(TRUE, TRUE),
+               repel = TRUE, labelsize =2)
+```
+
+By the assymetric plots it is clearly visible that there is a strong association between 
+1. Math Test scores of 40 to 55 and absence of completion of the test preparation course. That is, such scores are most often associated precisely with the fact that the student simply did not try hardly enough and did not pass the preliminary course.
+2. Math Test scores of 0-40 and free reduced lunch consumption, as well as Math Test scores of 80-95 and standard lunch consumption. Of course, it is not about food, but probably about socio-economic position of the student. 
+
+- Math Scores of 55-70 is hard to interpret in terms of association.
+- Math Scores of 95-100 and 70-80 are related to both standard lunch and completed preparation course.
+
+

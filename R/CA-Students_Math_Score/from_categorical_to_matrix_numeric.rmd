@@ -1,0 +1,53 @@
+---
+title: "Untitled"
+author: "Timur Sharifullin"
+date: "2023-02-20"
+output: html_document
+---
+
+## Загрузить Функцию
+```{r}
+to_ca_df = function(datta, main_variable){
+  colnames_vec = colnames(datta)
+  index_main_var = which(colnames(datta) == main_variable)
+  
+  fo = table(datta[,index_main_var]) %>% as.data.frame()
+  result_df = data.frame(first_one = fo[,1])
+  
+  result_colnames_vec = c(colnames(datta)[index_main_var])
+  
+  for(i in seq(1, length(colnames(datta)), 1)){
+    
+    if(i != index_main_var){
+      df = table(datta[,index_main_var],datta[,i]) %>% as.data.frame()
+      
+      for(k in seq(1, nrow(df)/length(unique(datta[,index_main_var])) , 1)){
+  
+        new = df[(1+length(unique(datta[,index_main_var]))*(k-1)):(length(unique(datta[,index_main_var]))+length(unique(datta[,index_main_var]))*(k-1)),3]
+        result_colnames_vec = append(result_colnames_vec,as.character(df[(1+length(unique(datta[,index_main_var]))*(k-1)),2]))
+        
+        result_df = cbind(result_df, new)
+      }
+  
+    } else {
+      next
+    }
+    
+  }
+
+  colnames(result_df) = result_colnames_vec
+  result_df
+}
+```
+
+## Выгрузить файл
+```{r}
+data = read.csv("Customers.csv")
+data = data[,c(2,6)]
+data1 = to_ca_df(data, main_variable = "Profession")
+
+
+write.csv(data1, "output.csv", row.names = F)
+```
+
+
