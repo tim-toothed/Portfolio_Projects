@@ -1,0 +1,971 @@
+---
+title: "Subjective Well-Being of Czechs: What is Assessment of Happiness Connected With?"
+author: "Timur Sharifullin, Ivan ushakov, Mikhail Grishin"
+output: 
+  html_document: 
+  rmdformats::downcute:
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    highlight: tango
+    use_bookdown: true
+    gallery: true
+date: "2021-11-16"
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+
+# Projects {.tabset}
+
+```{r echo = F, warning = F, message = F}
+library(foreign)
+library(dplyr)
+library(ggplot2)
+library(coin)
+library(psych)
+devtools::install_github("kupietz/kableExtra")
+library(kableExtra)
+library(pander)
+library(DescTools)
+library(haven)
+library(psych)
+library(car)
+library(sjstats)
+library(DescTools)
+library(tidyverse)
+library(corrplot)
+library(broom)
+library(sjPlot)
+library(tidyverse)
+library(readr)
+library(jtools)
+library(pander)
+
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))] }
+
+data <- read.spssdata <- read.spss("ESS9CZ.sav" , use.value.labels = T, to.data.frame = T)
+cz <- data %>% select(agea, happy, eduyrs, ctzcntr, aesfdrk, gndr)
+cz$happy <- as.numeric(cz$happy)-1
+```
+
+## Project 1: Descriptive Analysis
+Country: Czechia
+Topic: Subjective Wellbeing
+
+Our Team "Peepeepoopoo-value" presents the project "Subjective Well-Being of Czechs: What is Assessment of Happiness Connected With?". 
+
+### Individual contribution
+```{r echo = F}
+Task_number <- c("Structure & Raw script", "Visual design & Final graphs", "Comments & Conclusions")
+Contributor <- c("Sharifullin", "Grishin", "Ushakov")
+Individual_Contribution <- data.frame(Task_number = Task_number, Contributor = Contributor)
+pander(Individual_Contribution)
+```
+  
+
+### RQ
+Which demographic and social characteristics are related to happiness?
+
+#### Background
+Our team was extremely interested in the variable of Happiness in this database, so we decided to find out if there is any relationship between the "happy" variable with other variables from the database.
+
+#### Justification
+The concept of happiness is very fuzzy. It consists of many undetermined variables, so it interesting to turn its subjective evaluation. We aim to try to find variables (whether external or internal) that would have a relationship with the happiness. The seemingly valid choice is sociodemographic characteristics.  
+
+### Variable types
+- Variable "happy" - pseudo-interval
+Happiness is an important indicator of well-being
+
+- Variable "agea" - ratio
+We decided to use age variable, because many researchers talks about strong relationship between age and happiness. Usually, researches state that hapinness is U-form shaped by the age [https://link.springer.com/article/10.1007/s00148-016-0611-2], but there is debates around it [https://link.springer.com/article/10.1007/s10902-016-9830-1], so we decided to check it on our data by using a scatter plot.
+
+- Variable "eduyrs" - ratio
+There are many researches about the relationship of education and hapinness. Most of them look at the education more complex - not just years of education, but the meaning of education for the person and the society arount him or her. Researches confirm the realtionship, but it varies from age of person, desire and social accepteptance of higher education [https://www.tandfonline.com/doi/abs/10.1080/13504851.2015.1111982]. We decided to simplify it and check, is there any relationship between number of years of education and hapiness. 
+
+- Variable "ctzcntr" - nominal
+We did not find any articles on a topic of relationship of hapinness and citizen status, but we decided to use this variable following such a logic: perhaps migrants who came to the country are discriminated against, and therefore are less happy than citizence OR vice versa, migrants find work, family, communication, home in a new country, and therefore become happier than full-fledged citizens who are worried about any unrest and negative changes in their country
+
+- Variable "aesfdrk" - pseudo-interval
+Some researches take in to consideration the relationship of criminal activity in the country [https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1821905] or feeling of safety in the country connected to the materialistic or non-materialistic lifestyle [https://scholarlycommons.susqu.edu/ssd/2018/oralpresentations/14/]. We decided to check the relationship in more locally way - in local areas in Checzh Republic, and that why we use variable "Feeling of safety of walking alone in local area after dark"
+
+- Variable "gndr" - nominal
+Secondary variable that would help us to divide female from male population to notice the difference between the genders
+
+### A table with descriptive statistics (mean, median, etc.)
+
+```{r echo = F}
+library(psych)
+library(kableExtra)
+cz$eduyrs <- as.numeric(cz$eduyrs)
+cz$agea <- as.numeric(cz$agea)
+cz2 <- cz %>% 
+  select(agea, 
+happy,
+eduyrs)
+czdescription <- describe(cz2)
+czdescription <- czdescription %>%  select(-'vars', -'n', -'se')
+#czdescription
+#kableExtra::kable(czdescription)
+pander(czdescription)
+```
+
+### Histogram of a univariate distribution
+```{r echo = F}
+cz$agea <- as.numeric(cz$agea)
+ggplot(data=na.omit(cz)) +  
+  geom_histogram(binwidth = 1, aes(x=agea), fill = '#75d175') + 
+  geom_vline(data = na.omit(cz), aes(xintercept = mean(cz$agea)), linetype = "dashed") +
+  geom_text(data = na.omit(cz), mapping=aes(x=mean(cz$agea), y=50, label="Mean"), size=4, angle=90, vjust=-0.4, hjust=0) +
+  geom_vline(data = na.omit(cz), aes(xintercept = median(cz$agea))) +
+  geom_text(data = na.omit(cz), mapping=aes(x=median(cz$agea), y=25, label="Median"), size=4, angle=90, vjust=-0.4, hjust=0) +
+  labs(title ="Distribution of Age of respondents", x = "Age of respondents", y = "Number of respondents") + 
+  theme_bw()
+```
+
+Mean:
+```{r echo = F}
+mean(cz$agea)
+```
+
+Median:
+```{r echo = F}
+median(cz$agea)
+```
+
+Here we observe distribution of age of Czhechian respondents. We don't think any substantial conclusion regarding the research question can be made yet. However, we observe that mean and median measures are almost the same,  skew = 0.006002  and kurtosis= -0.9531,  so we see a normal symmetric distribution.
+
+
+### Barplot of a univariate distribution 
+
+```{r echo = F}
+ggplot(data=cz %>% filter(!is.na(happy))) +  
+  geom_bar(aes(x=factor(happy)), fill = '#a37fd4') + 
+  labs(title ="Distribution of Happiness Evaluation", x = "Hapiness Evaluation", y = "Number of respondents") +
+  theme_bw() 
+```
+
+Mode:
+```{r, echo = F}
+getmode(na.omit(cz$happy))
+```
+
+Median:
+```{r, echo = F}
+median(na.omit(cz$happy))
+```
+
+
+Then here we observed the distribution of answers regarding happiness evaluation. As we can see, most popular answers are 7 and 8, leaving us with the conclusion that people of Czhech Republic are mostly **quite happy** (with the mode of eight and median = 7).
+
+But is it related to the *age* of respondent?
+
+
+### Scatterplot of a bivariate distribution 
+```{r echo = F, warning = F}
+ggplot(data=cz %>% filter(!is.na(happy)) %>%  filter(!is.na(agea))) +  
+  geom_point(aes(x=happy, y=agea), color = '#ff9e42') +
+  geom_smooth(method="lm",aes(x=happy, y=agea)) +
+  labs(title ="Relationship between Happiness and Age of Respondents", x = "Hapinness Evaluation", y = "Age of Respondents") +
+  theme_bw()
+```
+
+
+This graph is supposed to show the relation between evaluation of happiness and respondents' age. However, it's hard to make any conclusions, so we add Smoothed conditional means line to display the relationship: the older the age, the less is happiness (only a hypothesis, to make real conclusion we need special tests).
+
+### Boxplot of a bivariate distribution
+```{r echo = F}
+ggplot(data=cz %>% filter(!is.na(happy)) %>%  filter(!is.na(ctzcntr))) +  geom_boxplot(aes(x=ctzcntr,y=happy), fill = '#ffff78') + 
+  labs(title ="Relationship of Hapinness and Status of Citizen of Country", x = "Citizen of Country", y = "Hapinness Evaluation") + 
+  theme_bw()
+```
+
+What does this diagram state? The average level of happiness in the two groups is the same, but the scatter of estimates among those who are not citizens is much larger. In this group the data are less symmetrical and the lower quartile is much closer to 5 than in the group of citizens. Consequently, about 25 percent of non-citizens gave a score of 5 or lower. It is also noticeable that no non-citizen rated their level of happiness at 10. Citizenship seems to have no relationship on happiness level.
+
+### Stacked barplot of a bivariate distribution
+
+```{r echo = F}
+ggplot(data=cz %>% filter(!is.na(gndr)) %>%  filter(!is.na(aesfdrk)), aes(fill = aesfdrk, x = gndr)) + 
+  geom_bar(position="fill") + labs(title ="How Feelings of Safety Depend on Gender", x = "Gender", y = "", fill = "Feeling of safety\nof walking alone \nin local area after \ndark") +
+  scale_fill_brewer(palette = "Accent") +
+  theme_bw()
+```
+
+
+We built this diagram, because we expect both of these variables to have connection to the happiness assessment, and at first we wanted to see, how they may be connected. Here we observe that bigger share of males feels itself "Very Safe" and bigger share of females feels "Very Unsafe". 
+
+Can Happiness be connected to gender and safety feeling?
+
+Let's examine gender at first.
+
+```{r echo = F, warning=F}
+options(scipen=99999)
+chisq.test(cz$happy, cz$gndr)
+```
+It is very close to the threshold, but p-value is lower than the number at which we would confirm the null hypothesis and claim the independence of the variable. This leaves us with the conclusion (finally) that variable of happiness assessment is not independent of the variable of gender in our data. Accordingly, there is the relationship between happiness and gender
+
+Now let's examine the safety. Null hypothesis is the independence of the variables.
+
+```{r, echo = F, warning=F}
+options(scipen=99999)
+chisq.test(cz$happy, cz$aesfdrk)
+```
+The p-value is incredibly small, so we can reject the null hypothesis and at last say that happiness assessment is not independent of feeling of safety in the street after dark. Again, there is the relationship between happiness and aesfdrk, and it is more durable than in the case of happiness and gender.
+
+Finally, we should test the hypothesis that there is no connection between gender and "feeling safe".
+```{r, echo = F, warning=F}
+options(scipen=99999)
+chisq.test(cz$gndr, cz$aesfdrk)
+```
+P-value<0.05, so there is a connection between aesfdrk and gndr. Our expectations were right, both of these variables have connection to the happiness assessment
+
+### Conclusions
+We wanted to see, which sociodemographic factors related to happiness assessment. For that we built some diagrams and did some statistical tests (namely chi-squared test). 
+
+As for the results, we saw that in general people of Czhech Repuclic are mostly satisfied with their life and are happy. However, they still assess their happiness differently. Say, people, who live there but who are not citizens assess their life-satisfaction with a wider range. 
+
+We found out that happiness evaluation is not independent of gender and age of the respondent. 
+
+Although not being a sociodemographic characteristic, we examined the assessment of feeling of safety of Czhech people and found that it is connected with the happiness variable. And here, since we know that most people are quite happy, we can hypothesize that people are happy also for the reason that they are not afraid to be left on the street after dark.
+
+Why they are not afraid? Does the police work good? Or there are no crimes? This leaves us with a domain for further research. 
+
+*Indeed fascinating*!
+
+## Project 2: Basic Stat Tests  {.tabset}
+
+```{r echo = F, warning = F, message = F}
+
+cz <- data %>% select(happy, sclmeet, aesfdrk, health, atchctr, gndr, agea, eduyrs, marsts, ctzcntr, brncntr, rlgblg, rlgatnd, pray, dscrgrp, dscrrce, dscrntn, dscrrlg, dscrlng, dscretn, dscrage, dscrgnd, dscrsex) 
+```
+
+Our team "Peepeepoopoo-value" presents the second project! It is devoted to basic statistical tests on the dataset of Czech Republic.
+
+**Individual contribution**
+```{r echo = F, warning = F}
+Task_number <- c("Chi-squared Test","T-test","ANOVA Test")
+Sharifullin <- c("+",
+             " ",
+             " ")
+Ushakov <- c(" ",
+             " ",
+             "+")
+Grishin <- c(" ",
+             "+",
+             " ")
+Individual_Contribution <- data.frame(Task_number = Task_number, Sharifullin = Sharifullin, Ushakov = Ushakov, Grishin = Grishin)
+Individual_Contribution
+```
+
+### Chi-squared Test
+
+####  Variables
+To begin with, chi-square test requires two categorical variables: test is only for nominal or ordinal variables. We decided to check if there is a relationship between gender("gndr") and health("health") variables. Examine their class. 
+```{r}
+class(cz$gndr)
+class(cz$health)
+```
+Both of them have "factor" class - no change required.
+
+1.1 Variable "health" has five groups:"Very Good", "Good", "Fair", "Bad", "Very bad".However, "Very bad" group has only 19 observations: 4 for male respondendents, and 15 for female. It means that we cannot use сhi-square test on the whole table.
+```{r echo = F, warning = F}
+cz1 <- cz %>% select(health,gndr) %>% filter(!is.na(gndr)) %>%  filter(!is.na(health))
+cz1 %>% count(health,gndr)
+```
+So, we decided to change the scale, keeping the model "negative-neutral-positive", combining "Very Good" responds with "Good" (result="Good" value) responds and "Bad" with "Very bad" (result ="Bad" value).
+```{r echo = F, warning = F}
+cz1$health1 <- if_else(cz1$health %in% c("Very good", "Good"), "Good",
+if_else(cz1$health %in% c("Bad", "Very bad"), "Bad",
+"Fair"))
+cz1$health1 <-as.factor(cz1$health1)
+cz1 <- cz1 %>% select(-health)
+cz1 %>% count(health1,gndr)
+```
+
+
+#### Hypotheses
+H0: Gender("gndr") and health("health1") variables are independent
+
+H1: Gender("gndr") and health("health1") variables are dependent
+
+If results of the test will show p-value=<0.05, then we cannot accept the null hypothesis of no dependence. If p-value>0.05 then we cannot reject the null hypothesis, therefore, our data does not show sufficient reason to believe that gender and health variables are dependent.
+
+#### Stacked Bar-Plot
+
+```{r echo = F, warning = F}
+ggplot(data=cz1 %>% filter(!is.na(gndr)) %>%  filter(!is.na(health1)), aes(fill = health1, x = gndr)) + 
+  geom_bar(position="fill") + labs(title ="How Health Is Related To Gender", x = "Gender", y = "", fill="Health condition") +
+  scale_fill_brewer(palette = "Accent") +
+  theme_bw()
+```
+
+
+#### Checking the assumptions of the chi-square test
+
+4.1 Comparing 2 categorical variable: "gndr" and "health1" are categorical variables (factor class), "gndr" is nominal, "health" is ordinal
+
+4.2 Levels/Categories are mutually exclusive: if the person is male, than this person is not female; if the person's health was evaluated as "Good", than the preson's health was not evaluated as "Fair" or "Bad", etc.
+
+4.3 Sample has more than 5 observations per group: 
+```{r echo = F, warning = F}
+cz1 %>% count(health1,gndr)
+```
+
+#### Chi-Squared Test
+- Chi-Square Test 
+```{r echo = F, warning = F}
+chisq.test(cz1$gndr, cz1$health1)
+```
+
+- Standardized Residuals
+```{r echo = F, warning = F}
+chisq.test(cz1$gndr, cz1$health1)$stdres
+```
+
+
+- Plot
+
+```{r echo = F, warning = F}
+corrplot(chisq.test(cz1$gndr, cz1$health1)$stdres,is.cor=FALSE)
+```
+
+- Interpretation: 
+In general, since p-value <0.05 the null hypothesis can not be accepted, which means that there is a relationship between Health and Gender, they are dependent.Analysing the standardised residuals, we can see that men evaluated their health as good significantly more often than women, as well as women evaluated their health as fair significantly more often than women. Between gender groups in assessing their health as bad - the difference is insignificant
+
+
+### T-test
+
+#### Variables
+We chose two variables - the categorical variable **gndr** denoting the gender of the respondent and the continuous variable **iagpnt** denoting the age that respondents consider ideal for becoming a father/mother. 
+
+First we check the class of variables that was automatically defined when we imported the data:
+
+  **iagpnt** defined as a factor, let's make it numerical.
+
+  **gndr** defined as a factor too, it`s ok. 
+
+Then we get rid of the missing values.
+
+```{r echo = F, warning = F, message = F}
+cz_ttest <- data %>% select(gndr, iagpnt)
+
+
+cz_ttest$iagpnt = as.numeric(as.character(cz_ttest$iagpnt))
+#class(cz_ttest$iagpnt)
+czna <- cz_ttest %>% 
+  drop_na()
+```
+
+```{r}
+class(cz_ttest$iagpnt)
+class(cz_ttest$gndr)
+```
+
+#### Statistics
+Let's now look at the statistics of our data, dividing them into groups by gender. 
+
+```{r echo = F, warning = F}
+describeBy(czna, czna$gndr)
+```
+We see that skew does not exceed 0.5 and kurtosis does not exceed 1 in both groups, indicating that it is close to a normal distribution. 
+For women the minimum ideal age is 16 and the maximum is 41, for men the minimum is 19 and the maximum is 40. 
+We have more than 700 responses from men and more than 1,000 from women. We assume that this sample size is large enough to claim normality of the distribution according to the central limit theorem, despite the deviations seen in skew and kurtosis.
+However, let us take a look at the graphs. 
+```{r echo = F, warning = F}
+ggplot(czna, aes(sample=iagpnt, color = gndr))+
+  stat_qq()+
+  stat_qq_line(color = 'black') +
+  ggtitle("Q-Q Plot")
+```
+
+#### Q-Q Plot
+The Q-Q plot shows that the distribution in the data (both groups) is not perfect, but still fairly close to normal (remembering the size of our sample). 
+
+```{r echo = F, warning = F}
+ggplot(czna, aes(x = gndr, y = iagpnt)) + 
+  geom_boxplot() +
+  stat_summary(fun = mean, geom = "point", shape = 4, size = 4) +
+  theme_classic() +
+  ggtitle("The Ideal Age for Becoming a Parent by Sex of Respondent")
+
+```
+
+The boxplot shows that in both groups, the median is almost the same, and so is the interquartile range. Women have more outliers, but overall the boxplots look almost identical, which may indicate the same variance.
+
+#### Homogeneity of variance
+But let's perform a statistical test for homogeneity of variance (Levene's test)
+Our null hypothesis is that the variance is the same in both groups.  
+```{r echo = F, warning = F}
+options(scipen = 9999)
+library(car)
+leveneTest(czna$iagpnt ~ czna$gndr)
+```
+The test showed p-value higher that the threshold. 
+Therefore, we believe that the null hypothesis cannot be rejected in this case, so we will consider the variance to be homogeneous. 
+
+To find out if the mean values in both groups are the same in our case, we should use the *Independent-samples t-test*. It has three assumptions: 
+
+1. normal distribution of the continuous variable in each group
+
+2. equal variances of the continuous variable in each group
+
+3. random sampling from the population
+
+We have checked two of them and can consider them compliant (the first assumption may not be satisfied if we consider the central limit theorem). 
+According to the [European Social Survey website](https://www.europeansocialsurvey.org/methodology/ess_methodology/sampling.html), their sampling is random, so the third condition can also be considered met. 
+
+#### T-test
+Now we can perform a statistical t-test. But first, let's state the null hypothesis: the average ideal age for becoming a parent is the same in the two groups (among men and women). 
+```{r echo = F, warning = F}
+t.test(czna$iagpnt ~ czna$gndr, var.equal = T) 
+```
+The result of the test shows p-value that is much higher than the threshold, so of course we cannot reject the null hypothesis - the average ideal age is the same for both men and women. 
+
+But let's make sure it is and do another test, Mann-Whitney's U / Wilcoxon's Rank Sum. 
+This is a non-parametric test that does not require a normal distribution or homogeneous variance. 
+```{r echo = F, warning = F}
+wilcox.test(iagpnt ~ gndr, data = czna)
+```
+Again, null hypothesis cannot be rejected here. It confirms the idea that difference between groups is not statistically significant.
+
+
+### ANOVA Test
+
+At first we choose two variables and examine their class. Ones that we chose are "agea" - age of respondent, and "aesfdrk" - evaluation of how one is scared to go in the street after dark. 
+Then we perform manipulations so that one variable (grouping factor) is factor and another one (dependent variable) is continious.
+```{r message = F, echo = F, warning = F}
+cz_anova <- cz %>% select(agea, aesfdrk) %>% na.omit()
+cz_anova$agea = as.numeric(as.character(cz_anova$agea))
+```
+
+```{r warning = F}
+class(cz_anova$agea)
+class(cz_anova$aesfdrk)
+```
+
+```{r echo = F, warning = F}
+ggplot(cz_anova) + 
+  geom_boxplot(aes(x=aesfdrk, y=agea), fill = '#ffff78') +
+  theme_bw() +
+  labs(title="Age and safety feeling", x="", y="Age") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Here is a boxplot, showing that younger people feel safer (judging by medians) as compared to people who feel very unsafe. Let's now check the assumptions of Anova test.
+
+#### Homogeneity of variances
+```{r echo = F, warning = F}
+leveneTest(cz_anova$agea ~ cz_anova$aesfdrk)
+```
+We applied Levene's Test, which is especially good, since it is robust to non-normality (which we yet haven't checked).
+Null hypothesis is that variances are equal.
+P-value is equal to 0.28, which means that Null hypothesis may not be rejected. So, we can say that variances are equal.
+First assumption holds.
+
+#### Normality of residuals
+
+```{r echo = F, warning = F}
+aov.out <- aov(cz_anova$agea ~ cz_anova$aesfdrk)
+anova.res <- residuals(object = aov.out)
+describe(anova.res)
+```
+Skew is not out of range of (-0.5; 0.5) and kurtosis is within the range of (-1; 1), so we can argue that residuals are normally distributed. Now we can finally interpret the Anova test.
+
+#### Anova Test
+Since the variances are equal and normality holds, we shoud run aov test and not oneway test.
+Null hypothesis is that means of all groups are equal. 
+```{r echo = F, warning = F}
+summary(aov.out)
+```
+P-value is < 0.05, so we can conclude that the difference in the level of emancipative values across safety-feeling groups is statistically significant. 
+It means that at least one mean is different from others and we need to find out, which one. 
+
+
+#### Post hoc Test
+The variances are equal, so we should run Tukey test.
+```{r echo = F, warning = F}
+TukeyHSD(aov.out)
+```
+
+```{r echo = F, warning = F}
+plot(TukeyHSD(aov.out), las=2)
+```
+
+Here we can see that all differences between pairs of groups are statistically significant, except for one between "Very Unsafe" and "Unsafe" people.
+
+#### Effect size
+```{r echo = F, warning = F}
+anova_stats(aov.out)
+```
+The omega-squared is 0.022. It is rather small, so even though there is statisctically significant difference in the level of emancipative values across people who rate their safety feeling (except for one pair we named above), the effect is still small.
+
+
+#### Non-parametric test Kruskal-Wallis test
+```{r echo = F, warning = F}
+kruskal.test(agea ~ aesfdrk, data = cz_anova)
+```
+P-value is small, so it confirms results of our F-test. There's a statistically significant difference between some groups. 
+
+```{r echo = F, warning = F}
+DunnTest(agea ~ aesfdrk, data = cz_anova)
+```
+Non-parametric post hoc test confirms our results that groups of people who respond "Very Unsafe" and "Unsafe" don't have a statistically significant difference. 
+
+It means that the double check went fine. Hooray!
+
+
+*Thank you for your attention!*
+
+## Project 3: Hierarchical Regression 
+```{r echo = F, warning = F, message = F}
+
+
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))] }
+options(scipen=100)
+
+
+data_cor <- data %>% select(happy, aesfdrk, wkhct, wkhtot, rlgdgr, gndr) %>% na.omit() 
+data_cor$wkhct <- as.numeric(data_cor$wkhct)
+data_cor$wkhtot <- as.numeric(data_cor$wkhtot)
+data_cor$happy <- as.numeric(data_cor$happy)-1
+data_cor$aesfdrk <- as.numeric(data_cor$aesfdrk)
+data_cor$rlgdgr <- as.numeric(data_cor$rlgdgr)-1
+data_cor <- data_cor %>% mutate(overtime = wkhtot-wkhct)
+
+data_cor$overtime <- as.numeric(data_cor$overtime)
+data_reg <- data_cor %>% select(-wkhct, -wkhtot, -rlgdgr, -overtime)
+
+
+data_cor$overtime <- as.numeric(data_cor$overtime)
+```
+
+Our team Peepeepoopoo-value is happy to present you our third project "Examining happiness of Czechs using correlation and regression"!
+
+### Individual contribution
+```{r  echo = F, warning = F}
+Task_number <- c("Correlations","Regression model","Interpretations and Descriptions")
+Sharifullin <- c("+",
+             "+",
+             " ")
+Ushakov <- c(" ",
+             "+",
+             "+")
+Grishin <- c(" ",
+             " ",
+             "+")
+Individual_Contribution <- data.frame(Task_number = Task_number, Sharifullin = Sharifullin, Ushakov = Ushakov, Grishin = Grishin)
+Individual_Contribution
+```
+
+
+### Variables
+The variable that we use are:
+
+happy - meaning one's self-assessment of happiness.
+aesfdrk - meaning how one is afraid to be in the street in the late time. 
+
+wkhct - meaning total amount of hours worked per week, excluding overtime. 
+wkhtot - meaning total amount of hours worked per week, including overtime.
+These variables are used to create "overtime" - variable containing amount of hours overworked per week.
+
+These variables are used to create 
+rlgdgr - meaning one's self-assessment of religiousness.
+gndr - meaning reported gender.
+
+
+#### Expectations
+
+We wish to examine, which of the variables may be related with how one reports his/her happiness level.
+As the background assumption - we claim that all of these are related to happiness.
+
+Even though some of the variables may be related to each other, we first need to examine it via correlation matrix, and if it is so, they shall be excluded.
+
+1. We decided to continue our research on this variable because in the first project chi-square test result shows that happy and aesfdrk are dependent variables. Some researches take in to consideration the negative relationship of criminal activity in the country [https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1821905] or feeling of safety in the country connected to the materialistic or non-materialistic lifestyle [https://scholarlycommons.susqu.edu/ssd/2018/oralpresentations/14/]. We decided to check the relationship in more locally way - in local areas in Checzh Republic, and that why we use variable "Feeling of safety of walking alone in local area after dark". Based on the literature, our expectation is that The more you are afraid to be on the street, the less happy you may be
+
+2. Expectation: The more hours you overwork, the less happy you are.This expectation is based on the research "To your happiness? Extra hours of labor supply and worker well-being" [https://www.sciencedirect.com/science/article/abs/pii/S1053535705001691]. Researcher says: "Overtime work hours generally are associated with increased work stress, fatigue and work–family interference.", so people became less happier, BUT also author says that increased by the additive working hours influence the wage of the person and by the increased wage the person became more happier. So, the researcher had mixed results. For us, it will be interesting to see if there is any correlation between overwork hours and happiness or by the amount of additive wage compensate that. 
+
+3. Expectation: The more religious you are, the more you believe that you are able to solve your troubles, the more your overall happiness may be. Most of the researches of the relationship between religiosity and happinness based on Muslims. The researches state that religious people are happier than non-religious [https://www.tandfonline.com/doi/abs/10.1080/13694670500040625] [https://www.tandfonline.com/doi/abs/10.1080/13674670601034547]. As the religion in the Czech Republic is represented primarily by Christianity (Catholicism) [https://en.wikipedia.org/wiki/Religion_in_the_Czech_Republic], it is interesting for us to check if there a significant correlation between those two variables. Notation: we are not tend to think that religiousity and Feeling of safety of walking alone in local area after dark are related to each other, because as we saw from articles religiousness is more conneted to mental (depression, anxiety) and physical health, while feeling of safety of walking alone in local area after dark are related to each other is more about criminal activity and situation in the local area or in the country. 
+
+And gender may be a moderator of some of these relationships.
+
+#### Descriptive Statistics 
+```{r   warning = F}
+descriptives <- data_cor %>% select(-gndr,-wkhtot,-wkhct)
+
+descript_table = as.data.frame(describe(descriptives))
+descript_table
+
+descript_table = descript_table %>% mutate(mode=c(getmode(descriptives$happy),
+getmode(descriptives$aesfdrk),
+getmode(descriptives$rlgdgr),
+getmode(descriptives$overtime)))
+descript_table
+
+
+```
+
+```{r   warning = F}
+summary(data_cor$gndr)
+```
+
+
+We deleted all the NA values and from 2398 only 1632 was left. However, it's not a big problem. We need that for the analysis.
+
+Now let's view at normality or non-normality of distribution of our numeric variables. We created a table with descriptive statistics. Here we look at skew and kurtosis. 
+If skew is greater that 0.5 and smaller than -0.5 we say that data of our variable is non-normally distributed. If kurtosis is greater than 1 and smaler than -1, we say data in our variable is non-normally distributed.
+
+Let's go one by one. Happiness is non-normally distributed (skew -0.68). Neither is safety feeling (kurtosis and skew are greater than the threshold). Both of the working hours variables are also non-normal, therefore overtime is also non-normal, having median in zero. So people on average don't overwork. Now we assume that this correlation may not work, we'll check on that.
+As for religion, on average people are non-religious, since median is one. 
+To conclude, most people are rather happy.
+
+Last thing to talk about is relation of gender to how one assess his/her happiness.
+Here is a boxplot and a table
+```{r   warning = F}
+ggplot(data_cor) + geom_boxplot(aes(x=gndr, y=happy))
+table(data_cor$happy, data_cor$gndr)
+```
+
+It seems like males and females don't differ in terms of happiness rates. We know that there are more females in the data, so by looking at shares of their rates it actually seems like they are quite similar, except for grade "9", which is not depicted in the graph. 
+Let's move to correlations.
+
+### Correlations
+
+We have just observed that none of our data is normally distributed, so Pearson's correlation cannot be applied here. We use Spearman's instead.
+
+```{r   warning = F}
+data_cor <- data_cor %>% select(-gndr, -wkhct, -wkhtot)
+tabb_corr <- tab_corr(data_cor,corr.method="spearman",p.numeric=T,fade.ns=T)
+tabb_corr
+```
+
+So, out of three expectations only one was was met. Unfortunately, neither religiousness, nor amount of overtime worked hours are significantly correlated with happiness assessment.
+So here our fear that model may include variables that are related to each other can be eliminated, because such variables are not correlated and we exclude them from the analysis. 
+
+
+Here is a detailed output of this test.
+```{r   warning = F}
+cor.test(data_cor$happy, data_cor$aesfdrk, method = "spearman")
+```
+
+This correlation is significant, but smaller than 0.3, so we can call it small.
+Let's move to regression models and compare these.
+
+
+### Regressions
+
+
+This is the first regression model examining the relation of how one rates his/her happiness to degree of how one is afraid to be one the street in the late time (further we would call it safety feeling). 
+
+```{r   warning = F}
+model1 <- lm(happy ~ aesfdrk, data = data_reg)
+summary(model1)
+```
+
+
+Before we proceed, let's look at correlation and regression coefficients. 
+
+For Spearman correlation between self-assessment of happiness level and one's safety feeling, first, we observe that p-value is below the threshold, so the result that we observe is statistically significant. It means there  is a correlation. How strong is is? 0.17, being a weak (small) correlation. 
+
+We can compute R squared coefficient by raising correlation coef in to second power. -0.17^2=0.029
+It means that the correlation between the variables explains 2.9% of the variance in the data.
+
+Now let's look at the regression model. The p-value is again lower than the threshold, hepling us to report a statictically significant relationship between the two variables. The regression coefficient is -0.45, meaning that each additional unit in safety feeling (or rather in lack of it) would decrease happiness perception by 0.45. It is quite something, but doesn't seem like a lot, so it confirms that the relationship is small (small correlation).
+Last thing to look at is R-squared coefficient. Its value 0.026 tells us that our model explains only 2,6% of the data, which is rather poor, but doesn't mean the relationship is not significant. However, this coef of the 1st linear regression model is smaller than R squared for correlation.
+
+
+### Hierarchical regression model
+Let's proceed and try to add a categorical variable to the analysis.
+```{r   warning = F}
+model2 <- lm(happy ~ aesfdrk + gndr, data = data_reg)
+summary(model2)
+```
+
+### Comparison of two models 
+```{r warning = F}
+reg_tab <- tab_model(model1, model2, show.ci = F)
+reg_tab
+```
+
+```{r warning = F}
+anova(model1,model2)
+```
+
+By statistical analysis, we understand that P-value is lower than a treshold therefore second model is better than the first one. Also R-squared coefficient for the 2nd model (0.038) is bigger than in the first regression model (0.026) and of computed R squared (0.029) of correlation therefore it explains a bigger share of variance in dependent variable. So, we shall stick with the 2nd model for the analysis.
+
+### Overall model fit
+To look at the overall model fit, we consider R-squared.
+Second model's R-squared is 0.038.
+
+It means that this model explains 3.8% of the variability of the responce data (dependent variable) around its mean. The maximum for this coefficient is 1, so the model is far from perfect. However, we may say that with the data we have it is the maximum amount of variance of the variable that we can explain we the happiness topic variables.
+All the p-values in the model are lower than the threshold, so we may conclude that the relations between the variables that the model describes (closer in coeffivient interpretations) are statistically significant.
+
+### Interpretation of the coefficients.
+```{r warning = F}
+reg2_tab <- tab_model(model2, show.ci = F)
+reg2_tab
+```
+
+
+The intercept coefficient is a constant in our regression equation. It's correctness is justified by the p-value below the threshold. It means that if all other variables are 0 (and gndr being Male), we expect happiness rate to be 7.92. 
+
+And when we add 1 unit of how one is afraid to be outside (to aesfdrk; in other words, if one's fear to be outside increases by one point), we would expect happiness to decrease by 0.52 (each time one unit is added). This relationship is confirmed and significant by the p-value power than 0.05.
+
+Now to the categorical variable. With all the other variables being constant, we expect females to rate their happiness 0.39 points higher, as compared to males.
+
+And finally, we reiterate that our model explains 3.8% of outcome variable variation.
+
+### Regression equation
+
+Happiness self_assessment = 7.92 - 0.52*(fear of being on the street late) + 0.24*(gender[female])
+
+
+### Table output
+```{r warning = F}
+reg2_tab1 <- tab_model(model2, show.ci = F)
+reg2_tab1
+```
+
+### Conclusion 
+Most of our expectations were not met: not all of our variables were related to hapinness, only in one, that describes how one is afraid to be in the street in the late time, we saw a weak correlation. In the case of linear regression model of two variables we can see that only 2,61% was explained, but in the second, in which we included gndr caterigorical variable, R squared shows that 3,8% of females was explained. So, we can say that the relationship between level of happinness and a fear of walking in the street in the late time & gender variable is significant, but weak.
+
+Coming to more daily language, we found out that one's happiness can be explained via one's insecurity feeling and gender and that is statistically confirmed. We found out that women are on average happier than men and that one's insecurity feeling decreases happiness. In the next project we will dig deeper into these and other relationships of variables and happiness.  
+
+## Project 4: Interaction Effects
+
+
+```{r echo = F, warning = F, message = F}
+pro4_data <- data %>% select(happy, gndr, trstprl, gincdif, atchctr, nwspol, aesfdrk, trstplc, netustm, stfeco, stfgov, stfhlth, evfredu, evfrjob, ifredu, ifrjob) %>% na.omit()
+
+pro4_data$happy = as.numeric(pro4_data$happy)-1
+pro4_data$aesfdrk = as.numeric(pro4_data$aesfdrk)
+pro4_data$trstplc = as.numeric(pro4_data$trstplc)-1                            
+pro4_data$trstprl = as.numeric(pro4_data$trstprl)-1
+pro4_data$atchctr = as.numeric(pro4_data$atchctr)-1
+```
+
+Our team Peepeepoopoo-value is happy to present you our forth project "Examining happiness of Czechs using correlation and regression models with interaction effect"!
+
+How can attitudes toward public policy, safety on the streets, and gender characteristics affect people's happiness?
+
+### Individual contribution
+```{r  echo = F, warning = F}
+Task_number <- c("Correlations","Regression model","Interpretations and Descriptions")
+Sharifullin <- c("+",
+             "+",
+             " ")
+Ushakov <- c(" ",
+             "+",
+             "+")
+Grishin <- c(" ",
+             "+",
+             "+")
+Individual_Contribution <- data.frame(Task_number = Task_number, Sharifullin = Sharifullin, Ushakov = Ushakov, Grishin = Grishin)
+Individual_Contribution
+```
+
+
+### Variables and hypotheses
+Compared to the previous project we now have more variables. These are:
+
+happy - meaning one's self-assessment of happiness.
+gndr - meaning reported gender
+trstprl - reported level of trust in the parliament (we can replace it with government in general)
+atchctr - meaning self-assessment of one's emotional attachment to the country (Czechia namely).
+trstplc - reported level of trust to police
+aesfdrk - reported level of feeling of safety of walking alone in local area after dark
+
+We hypothesise that:
+
+##### Interaction effect of trstprl on atchctr is the predictor of one's self-assessment of happiness
+Reported level of trust in the parliament(trstprl) is related to the meaning self-assessment  of one's emotional attachment to the country (atchctr) as the variable atchctr itself was created by ESS as a empirical tool that can explain the political behaviour ("vote choice, solidarity (Paskov and Dewilde, 2012) and redistributive preferences (CostaFont and Cowell, 2014), support for European integration (Hooghe and Marks, 2004), or attitudes towards immigrants (Sides and Citrin, 2007) and inter-racial attitudes (Charnysh et al., 2014, Transue, 2007)" [https://www.europeansocialsurvey.org/docs/methodology/core_ess_questionnaire/ESS8_emotional_attachment_final_template.pdf]). So, it was created to analyze the role of collective identities in motivating these political attitudes and actions. 
+
+According to the research of the influence of political decisions on happiness in America "different ideological and partisan orientations of state governments, as well as a state’s pattern of public policies, have strong effects on satisfaction with life, net of economic, social, and cultural factors". And on this result we decided that interaction effect of atchctr & trstprl could be a predictor of happiness.
+
+##### Interaction effect of trstplc on aesfdrk is the predictor of one's self-assessment of happiness
+We think that trust in police (trstplc) is related to reported level of feeling of safety of walking alone in local area after dark (aesfdrk), because "Effective criminal justice policies are essential for the economic and social well-being of European citizens and for the establishment of a European knowledge-based society" [https://www.europeansocialsurvey.org/docs/round5/questionnaire/ESS5_final_trust_in_police_courts_module_template.pdf] and the feeling of safety on the streent in a night-time is strongly connected to the criminal activity, and if the citizens do not trust police - they cannot not feel fully safety walking alone in local area after dark.
+
+Happiness is the important indicator of well-being so such an interaction effect of trstplc on aesfdrk could be a good predictor of happiness
+
+##### Gender predict the happiness
+The research of Rajen Mookerjee "Gender, religion and happiness" [https://www.sciencedirect.com/science/article/abs/pii/S1053535705000272], state that "greater representation of women in parliament robustly increase happiness levels". Another research "Happiness, Housework and Gender Inequality in Europe" by Letizia Mencarini and Maria Sironi state that "gender equality at the country level can explain variation in happiness at the individual level". So, by including this variable (gndr) in our model we expect that in relationship with other continuos variables it can be another predictor of happiness.
+
+...
+
+
+We omitted all the NA values and out of 2398 observations only 1495 was left.
+Now let's look at the variables.
+
+```{r}
+descriptives <- pro4_data %>% select(-gndr, -gincdif, -nwspol, -stfeco, -stfgov, -stfhlth, -evfredu, -evfrjob, -ifredu, -ifrjob, -netustm)
+
+descript_table = as.data.frame(describe(descriptives))
+
+
+descript_table = descript_table %>% mutate(mode=c(getmode(descriptives$happy),
+getmode(descriptives$trstprl),
+getmode(descriptives$atchctr),
+getmode(descriptives$aesfdrk),
+getmode(descriptives$trstplc)))
+descript_table
+```
+
+```{r}
+summary(pro4_data$gndr)
+```
+
+
+Median value tells us that mostly people are happy (7/10 is a lot) and mostly are attached to Czechia (8/10). They don't fully trust the parliament (with median of 5/10). Let's bring other informative characteristics like skew and kurtosis that would tell us, whether the data in the variable is normally distributed (and it is when kurtosis in [-1;1] and skew in [-0.5;0.5]).
+
+Variable describing happiness self-assessment is non-normally distributed (skew out of range being -0.62), variable of emotional attachment to Czechia is non-normal (both skew and kurtosis are higher than the threshold. Trust in the police is almost normal (kurtosis is fine, but skew is -0.51).Insecurity feeling non-normally distributed, because kurtosis is higher than 1 (being 1.13) As for trust in the parliament, it is normal (skew -0.05, kurtosis -0.71).
+
+There are also more females than males (almost 100 females more). And most people agree that incomes should be equalized.
+
+### Correlation matrix
+
+Let us build a correlation matrix just to check than our variables are fine and can be used.
+Since some of the variables are non-normally distributed, we need to use spearman's correlation method.
+
+```{r}
+tabb_corr_pro4 <- tab_corr(descriptives,corr.method="spearman",p.numeric=T,fade.ns=T)
+tabb_corr_pro4
+```
+
+As you can see, most of them are correlated with happiness significantly (bold font means that p-value is lower than the threshold and the correlation is statistically significant) except for the trust in the parliament. That is not a problem, because this variable may be used as a moderator of an effect and there be significant. This we shall see. 
+
+### Multiple Regression model
+
+First we center* the continious predictors and then interpret. 
+
+*centering means that we transform the variable in such a way that in the model it would have it's mean value as zero.
+```{r}
+pro4_data$aesfdrk_cent <- scale(pro4_data$aesfdrk, center = T, scale = F) 
+pro4_data$aesfdrk_cent <- as.numeric(pro4_data$aesfdrk_cent)
+
+pro4_data$trstplc_cent <- scale(pro4_data$trstplc, center = T, scale = F) 
+pro4_data$trstplc_cent <- as.numeric(pro4_data$trstplc_cent)
+
+pro4_data$trstprl_cent <- scale(pro4_data$trstprl, center = T, scale = F) 
+pro4_data$trstprl_cent <- as.numeric(pro4_data$trstprl_cent)
+
+pro4_data$atchctr_cent <- scale(pro4_data$atchctr, center = T, scale = F) 
+pro4_data$atchctr_cent <- as.numeric(pro4_data$atchctr_cent)
+```
+
+
+```{r}
+test_model <- lm(happy ~ gndr + atchctr_cent * trstprl_cent + aesfdrk * trstplc_cent, data = pro4_data)
+summary(test_model)
+```
+
+
+```{r}
+model1 <- lm(happy ~ gndr, data = pro4_data)
+model2 <- lm(happy ~ gndr + atchctr_cent, data = pro4_data)
+model3 <- lm(happy ~ gndr + atchctr_cent * trstprl_cent, data = pro4_data)
+model4 <- lm(happy ~ gndr + atchctr_cent * trstprl_cent + aesfdrk_cent, data = pro4_data)
+model5 <- lm(happy ~ gndr + atchctr_cent * trstprl_cent + aesfdrk_cent * trstplc_cent, data = pro4_data)
+
+reg_tab <- tab_model(model1, model2, model3, model4, model5, show.ci = F)
+reg_tab
+```
+
+Here are our models. First we have just additive models, then interaction is added. 
+We suggest to compare these models by their R-squared coefficients. You can see that each model is increasing the coefficient. 
+R-squared shows how much of the variance in the data the model explains. Therefore, the bigger the coefficient, the better the model. Hence, we conclude that judging by the model fit our last model with two interaction effects and 6 variables overall is better than other ones. 
+
+So our first model explains 0.5% of the variance in the data and our last model explains 11.4%. 
+
+
+```{r}
+anova(model1, model2, model3, model4, model5)
+```
+
+Here in anova test p-value below the threshold means that previous model explains less variance in the data than the new one. Since we have p-value below the threshold each comparison, it means that our last and most complex model is the best in explaining variance in the data. 
+
+
+### Interpretation of the coefficients
+
+```{r}
+summary(model5)
+```
+
+Before we start the interpretation we need to iterate that only those relations are interpreted, where p-value is lower than the threshold (those that have stars). So only statistically significant relations are interpreted, other make no sense.
+
+So, to begin with, when all the other numeric variables are constant and zero and when gndr is set to male and gincdif is set to agree strongly, we expect happiness self-assessment to be 7.05.
+
+Then, when respondent is female, we expect happiness to increase by 0.3 (it adds to the incercept).
+Also, each increment (by one mean value) in emotional attachment (centered) would increase our happiness by 0.24 This relationship is moderated by how one trusts the government (centered). Each increment (by its mean value) in trust in government would add 0.02 to the estimate of attachment variable. 
+So, if both attachment and trust in government increase their mean values (by one mean value), we would expect happiness estimate to increase by 0.24 + 0.02 = 0.26.
+
+Next we go to insecurity feeling. Each increment by its one mean value would decrease happiness estimate by 0.4. This is moderated by how much one trusts the police. So each increment in one mean value of this variable would moderate the relationship and affect the change (add 0.06 to effect of insecurity) in the following way: if both insecurity feeling and trust in police have an increment in one mean value (different for each of the variables) then happiness estimate would first decrease by 0.4, but then increase by 0.06, so overall decrease by 0.34.
+
+
+What does it all mean in plain words? Females are happier than males, those who feel insecure are less happy (but if they trust the police they are more happy than those who do not), people who do feel emotional attachment to their country are happier (and if they trust the parliament the effect increases)
+
+
+### Interaction plots
+
+```{r}
+plot_model(model1, type = "pred", terms = c("gndr"))
+```
+
+
+Interpretation: As we can see by this plot, the level of happinness varies greatly by gender: generally, females are more happier than men, confidence interval of female are higher than confidence interval of male. Confidence intervals do not overlap. 
+
+```{r}
+plot_model(model2, type = "pred", terms = c("gndr", "atchctr_cent[-7, 2]"))
+```
+Interpretation: Now in our plot we include atchctr variable. So, the scores of of males are lower in both cases in comparison with females: when meaning self-assessment of one's emotional attachment to the country = -7 and 2. Confidence intervals for points of the same colour overlap in both cases, which means that differences become lower than they was in the firt case.
+
+
+```{r}
+plot_model(model3, type = "int")
+```
+Interpretation: By the lines, we can see that a person who is more attached to the country score higher than less attached.This dependency is observed for both groups. However, by the red line which shows us the level of trust to parliament = -4.31 (lower) and the blue line that shows us the lelvel of trust =5.69 (higher), we can state that if a person has higher level of trust to parliament dependency between attachmenth to the country and the level of happiness will be higher. Also, we can see an intercept of the lines for level of attachment to the country approximately equals about -1. So, when attachment to the country values are less than -1, people who trust parliament more are less happy than people who trust parliament less, and vice versa, when the level of attachment to the country are higher than -1.
+
+
+Do the confidence intervals of the two lines overlap? If yes, at what number of education years?
+
+```{r}
+plot_model(model4, type = "int")
+```
+Interpretation: This graphic is quite similar to the last one, but the differnces here are produced by including the aesfdrk variable. So, by the plot we can see that point with the highest level of attachment to country the value of happiness became lower and the point with the lowest the same way, but not so noticeable, which shifted the point of intercept closer to zero. Also, sligthly, but the red line now lies slightly higher. In other words, people with a low level of trust in parliament became a little happier with adding the predictor aesfdrk in model, while people with the high level of trust to parliament and, especially people who have higher lelvel of attachment to the country, became less happier.
+
+```{r}
+plot_model(model5, type = "int")
+```
+Interpretation: there are two plots - one that describes interaction effect of trstprl on atchtr ahd another that describes interaction effect of trstplc on easfdrk in the whole model (happy ~ gndr + atchctr_cent * trstprl_cent + aesfdrk_cent * trstplc_cent). The first one: in the final model the level of happiness for the people with the lower level of trust to parliament is increased, while for those who has higher level of trust to parliament decreased, so the intercept now is in the point of attachment to the country = 1.25. Now most of the people that have lower trust to parliament are happier than those who have lower, exception is only for those who have the highest values of level of attachment to the country. The second one: as we can see most of the people who have higher level of trust to police are happier and the dependency between trust in police variable and the feeling of safety of walking alone in local area after dark variable is much lower for those who trust in police more. For those who trust less, dependency is much higher as we can see by the slope ща the red line. 
+
+
+### Average marginal effects
+
+
+```{r}
+library(margins)
+margins(model5)
+```
+
+Here are the average marginal effect of the variables. These estimates have already been interpreted, but let us go through them once fore. For females we expect happiness to raise by 0.3. Each additional (marginal) mean value to trust in police would increase happiness by 0.06. Each additional (marginal) mean value to emotional attachment to the country would increase happiness by 0.24. 
+Each additional (marginal) mean value to street insecurity assessment would decrease happiness by 0.4.
+As for the trust in the parliament. As we said previously, it it insignificant in both correlationa model and in regression model as a distinct predictor, but it works well as a moderator. 
+
+
+### Conclusion
+
+In this project (as well as previous three) we viewed upon possible predictors (or related variables) to happiness. We are happy to finally confirm that we found those and managed to statistically conrirm these relationships.
+
+We have built both additive and interaction regression models, compared them and plotted the outcomes. To conclude, we feel the need to reiterate our results.
+Our model explaining more than 11% of the variance allowed to state that happiness may be predicted by feeling of insecurity and emotional attachment to the country. The strength of these relations is respectively dependent on reported trust tothe police and reported trust to the parliament.
+
+It all allows us to, first, confirm our hypothses and, second, broaden our research question and state that one's current administrative territorial location actually affects happiness self-assesment.
+Therefore, in order for state's citizens to be happy, state needs to build solid realtions, where citizens would trust it. It would boost happiness.
+
+To conclude, some scientists and economists not prefer not to take GDP as most important macro-indicator, but to take overall citizens happiness estimate [https://www.wartsila.com/insights/article/going-beyond-gdp-the-happiness-index]. If that's the most important thing for the state, then our findings allow to advise some government policy directions. 
+
+*Thank you for your attention!* 
+
