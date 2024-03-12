@@ -1,0 +1,357 @@
+---
+title: "Multidimensional Scaling (MDS): Region Hapiness Homogenity"
+author: "Timur Sharifullin"
+date: "2023-03-13"
+output: 
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(smacof)
+library(ggplot2)
+library(plotly)
+
+happy = read.csv("2022.csv")
+
+
+set.seed(123)
+knitr::opts_chunk$set(message= F, warning=F)
+```
+
+## Introduction: about Dataset
+
+The dataset "World Happiness Report" contains information about happiness scores and various contributing factors for countries around the world in 2022. World Happiness Report contains a lot of factors despite the overall happiness score, and that is why MDS could be useful to find similarities and dissimilarites between countries in terms of quality of life.<br />
+
+The Happiness Score is explained by the following factors:<br />
+
+GDP per capita<br /> 
+Healthy Life Expectancy<br />
+Social support<br />
+Freedom to make life choices<br />
+Generosity<br />
+Corruption Perception<br />
+
+I also include the region where the country is located to find if there is a similarity of quality of life by region. I  exclude rank, happiness score and dystopia (hypothetical anti-happiness benchmark), since it is cumulative variables, and **the aim of this  analysis is to show how MDS could be useful in terms of defining similarities in Happiness factors of the countries**. 
+
+## Data Preparation
+
+```{r}
+# Fix problems with "," in numbers instead of "."
+
+happy[,3:12] = apply(happy[,3:12],
+                       2,
+                       function(x) as.numeric(gsub(",", ".", x)))
+
+# rename variables
+
+colnames(happy) = c("rank", "country", "happy_score", "whisker.low", "whisker.high",
+                    "dystopia", "gdp_per_capita", "social_support",
+                    "healthy_life_expectancy", "freedom",
+                    "generosity", "corrupt_perceptions")
+
+# omit missing observations
+
+happy = na.omit(happy)
+
+# create regions
+
+happy$region = if_else(happy$country %in% 
+                          c("Denmark", "Finland", "Norway", "Sweden"), 
+                        "Scandinavia",
+                if_else(happy$country %in% 
+                          c("Austria", "Belgium", "France", "Germany", "Ireland", "Luxembourg*", "Netherlands", "Switzerland",
+                            "United Kingdom","Iceland"),
+                        "Western Europe",
+                if_else(happy$country %in%
+                          c("Cyprus", "Greece", "Italy", "Malta", "Portugal", "Spain"),
+                        "Southern Europe",
+                if_else(happy$country %in%
+                          c("Czechia", "Hungary", "Poland", "Slovakia", "Slovenia"),
+                        "Central Europe",
+                if_else(happy$country %in%
+                          c("Bosnia and Herzegovina", "Bulgaria", "Croatia", "Kosovo", "Montenegro", "North Macedonia",
+                            "Romania", "Serbia", "Albania"),
+                        "Balkans",
+                if_else(happy$country %in%
+                          c("Belarus*", "Russia", "Ukraine", "Moldova"),
+                        "Eastern Europe",                        
+                if_else(happy$country %in%
+                          c("Canada", "United States"),
+                        "North America",
+                if_else(happy$country %in%
+                          c("Argentina", "Bolivia", "Brazil", "Chile", "Colombia", "Costa Rica", "Dominican Republic",
+                            "Ecuador", "El Salvador", "Guatemala*", "Honduras", "Jamaica", "Mexico", "Nicaragua",
+                            "Panama", "Paraguay", "Peru", "Puerto Rico", "Uruguay", "Venezuela"),
+                        "Latin America",
+                if_else(happy$country %in%
+                          c("Bahrain", "Iran", "Iraq", "Israel", "Jordan", "Kuwait*", "Lebanon", "Oman",
+                            "Qatar", "Saudi Arabia", "United Arab Emirates", "Yemen*","North Cyprus*",
+                            "Palestinian Territories*", "Afghanistan"),
+                        "Middle East",
+                if_else(happy$country %in%
+                          c("Bangladesh", "Bhutan", "India", "Maldives", "Nepal", "Pakistan", "Sri Lanka"),
+                        "South Asia",
+                if_else(happy$country %in%
+                          c("Lithuania", "Estonia", "Latvia"),
+                        "Baltic",
+                if_else(happy$country %in%
+                          c("Kazakhstan", "Uzbekistan", "Kyrgyzstan", "Turkmenistan*", "Armenia", "Azerbaijan*","Georgia",
+                            "Turkey","Tajikistan"),
+                        "Central Asia",                        
+                if_else(happy$country %in%
+                          c("Brunei", "Cambodia", "Indonesia", "Laos", "Malaysia", "Myanmar", "Philippines",
+                            "Singapore", "Thailand", "Timor-Leste", "Vietnam"),
+                        "Southeast Asia",                        
+                if_else(happy$country %in%
+                          c("China", "Japan", "North Korea", "South Korea", "Mongolia", "Taiwan", "Taiwan Province of China",
+                            "Hong Kong S.A.R. of China"),
+                        "East Asia",
+                if_else(happy$country %in%
+                          c("Australia", "Fiji", "Kiribati", "Marshall Islands", "Micronesia", "Nauru",
+                            "New Zealand", "Palau", "Papua New Guinea", "Samoa", "Solomon Islands", "Tonga",
+                            "Tuvalu", "Vanuatu"),
+                        "Oceania", 
+                if_else(happy$country %in%
+                          c("Algeria", "Angola", "Benin", "Botswana*", "Burkina Faso", "Burundi", "Cameroon",
+                            "Cape Verde", "Central African Republic", "Chad*", "Comoros*", "Congo", 
+                            "Democratic Republic of the Congo", "Djibouti", "Egypt", "Equatorial Guinea", "Eritrea",
+                            "Eswatini", "Ethiopia", "Gabon", "Gambia*", "Ghana", "Guinea", "Guinea-Bissau", "Ivory Coast",
+                            "Kenya", "Lesotho*", "Liberia*", "Libya*", "Madagascar*",
+                            "Malawi", "Mali", "Mauritania*", "Mauritius",
+                            "Morocco", "Mozambique", "Namibia", "Niger*", "Nigeria", "Rwanda*", "Sao Tome and Principe",
+                            "Senegal", "Seychelles", "Sierra Leone", "Somalia", "South Africa", "South Sudan", "Sudan",
+                            "Tanzania", "Togo", "Tunisia", "Uganda", "Zambia", "Zimbabwe", "Eswatini, Kingdom of*"),
+                        "Africa",
+                        NA))))))))))))))))
+
+# countries as names of rows
+row.names(happy) = happy$country
+
+# save a copy of vector of regions
+regions = happy$region
+
+# remove unwanted variables
+happy1 = happy[,c(-1,-2,-3,-4,-5,-6,-13)]
+
+head(happy1)
+```
+
+## MDS
+
+### Distance Matrix
+
+```{r}
+dissimilarity_matrix = dist(happy1)
+```
+
+### Shepard Plots & Stress-1 Values
+
+
+```{r}
+mds_ratio = mds(dissimilarity_matrix, type = "ratio")
+mds_ordinal = mds(dissimilarity_matrix, type = "ordinal")
+mds_mspline = mds(dissimilarity_matrix, type = "mspline")
+#as.data.frame(sort(mds_ordinal$spp,decreasing=T))
+plot(mds_ratio, plot.type = "Shepard", main = "Shepard Diagram (Ratio Transformation)")
+plot(mds_ordinal, plot.type = "Shepard", main = "Shepard Diagram (Ordinal Transformation)")
+plot(mds_mspline, plot.type = "Shepard", main = "Shepard Diagram (mspline Transformation)")
+```
+
+We can see that Ratio Transformation is working good, however ordinal and mspline transformations seem to be better for this task.
+
+
+```{r}
+mds_ratio
+mds_ordinal
+mds_mspline
+```
+
+Indeed, Stress-1 value is lower for ordinal and mspline transformation in comparison with ratio. It seems that ordinal should be chosen, since it has the lowest Stress-1 value = 0.066, which is a good fit. Let's perform permutation tests to be sure.
+
+```{r}
+perm = permtest(mds_ratio, method.dat = "euclidean", verbose = F)
+perm
+```
+
+Based on the output of the ECDF permutation test, the observed stress value of the model with ratio transformation is 0.091. The p-value of the test is less than 0.001, which means that the observed stress value is significant at the 0.001 level. 
+
+```{r}
+perm_ord = permtest(mds_ordinal, method.dat = "euclidean", verbose = F)
+perm_ord
+```
+
+Based on the output of the ECDF permutation test, the observed stress value of the model with ordinal transformation is 0.066. The p-value of the test is less than 0.001, which means that the observed stress value is significant at the 0.001 level. This suggests that the model is a good fit for the data and that the stress value is unlikely to have occurred by chance.
+
+```{r}
+perm_mspline = permtest(mds_mspline, method.dat = "euclidean", verbose = F)
+perm_mspline
+```
+
+Based on the output of the ECDF permutation test, the observed stress value of the model with mspline transformation is 0.067. The p-value of the test is less than 0.001, which means that the observed stress value is significant at the 0.001 level. This suggests that the model is a good fit for the data and that the stress value is unlikely to have occurred by chance.
+
+So, we can conclude that it is better to use ordinal type of MDS.
+
+### Stress Per Point
+
+```{r}
+summary(mds_ordinal)
+```
+
+The maximum stress per point is 3.42, and it corresponds to Algeria. The minimum stress per point is 0.20, and it corresponds to Burkina Faso. Overall, we cannot see any points that are represented poorly and should be cut from the dataset.
+
+
+### Stability of a solution : jackknife
+
+```{r}
+jackmds(mds_ordinal)
+```
+
+The "Stability measure" of 1 indicates that the MDS solution is stable, meaning that if the analysis were to be repeated with a different random sample or subset of the data, the resulting solution would be similar.
+
+The "Cross validity" measure of 1 indicates that the MDS solution is highly valid, meaning that it accurately reflects the similarities and differences between the original data points.
+
+The "Dispersion" measure of 0 represents the average deviation between the original data points and the MDS solution, and suggests that the MDS model fits the data perfectly.
+
+Overall, these results suggest that the MDS solution is a valid and stable representation of the underlying data structure
+
+### Stability of a solution : bootstrap
+
+```{r}
+bootmds(mds_ordinal,as.data.frame(t(happy1)), method.dat = "euclidean", nrep = 300)
+```
+
+Stability coefficient of 0.8951 suggests quite good stability of the model. 
+
+## Visualisation
+
+```{r}
+mds_df = data.frame(mds_ordinal$conf, regions)
+coef_vec = biplotmds(mds_ordinal,extvar=happy1[,c(1:6)])
+
+library(ggrepel)
+library(ggforce)
+
+p = ggplot(coef_vec, aes(x = coef_vec$model$X[,1], y = coef_vec$model$X[,2], 
+                         label = row.names(coef_vec$model$X),color = regions)) +
+  geom_point() +
+  geom_text_repel(size = 2,fontface = 'bold', segment.alpha = 0,segment.color = 'grey50',
+                  min.segment.length = 10, aes(color = regions)) +
+  labs(x="",y="",title="Country Similarity by Happiness Factors") +
+  
+  # Vectors for creation of Biplot
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,1], yend = coef_vec$coefficients[2,1]), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,1]+0.2, y = coef_vec$coefficients[2,1],
+                 label = colnames(coef_vec$coefficients)[1]),
+             size=3) +
+  
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,2]/1.6, yend = coef_vec$coefficients[2,2]/1.6), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,2]/1.6, y = coef_vec$coefficients[2,2]/1.6,label = colnames(coef_vec$coefficients)[2]),
+             size=3) +
+  
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,3], yend = coef_vec$coefficients[2,3]), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,3]+0.1, y = coef_vec$coefficients[2,3]-0.1,
+                 label = colnames(coef_vec$coefficients)[3]),
+             size=2) +
+  
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,4], yend = coef_vec$coefficients[2,4]), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,4], y = coef_vec$coefficients[2,4],label = colnames(coef_vec$coefficients)[4]),
+             size=3) +
+  
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,5], yend = coef_vec$coefficients[2,5]), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,5], y = coef_vec$coefficients[2,5],label = colnames(coef_vec$coefficients)[5]),
+             size=3) +
+  
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,6], yend = coef_vec$coefficients[2,6]), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,6], y = coef_vec$coefficients[2,6]-0.1,
+                 label = colnames(coef_vec$coefficients)[6]),
+             size=3)
+
+p
+```
+
+<span style="color:red">**IMPORTANT**: the effect of social_support factor is much more than other factors and worsened the readability of the graph, so it was decided to shorten the vector length for the sake of the readability of the graph. It is useful to look at the interactive plot below the description to see all regions in details and all true factor effects.</span>
+
+The MDS analysis produced a two-dimensional representation of the dissimilarities among the countries. The resulting plot shows the position of each country in the two-dimensional space, with closer countries representing higher similarities and distant countries representing higher dissimilarities. The graphic is a biplot, which has factors of happiness represented as vectors.
+
+Based on the plot, we can observe that the countries seem to cluster based on their region, but not all of the regions are homogeneous. Countries from Scandinavia, Western Europe, Oceania and North America tend to cluster together to the left side of the plot, which signals that these countries have the highest gdp and healthy life expectancy. They different in terms of perception of corruption, freedom and social support, but the values for these factors are also high. We can see that Scandinavia countries are very similar, these countries have higher social support and freedom values than Singapore or Luxembourg and lower percepted corruption. 
+
+Some East Asia countries are in the bottom-left quadrant - South Korea and Hong Kong, they have higher gdp but lower social support and freedom  values, Mongolia is happy in terms of social support and freedom, but its gdp creates the huge difference between this country and Hong Kong. All in all, East Asia are quite heterogenous. 
+
+Most of the countries that are closer to the center of the graph are from completely different regions, it is difficult to highlight the regions with high homogeneity here, one these region is Latin America. On the interactive plot by double-clicking on Latin America region you can see that most of the countries from this region are somewhere in the middle of the graph with one exception - Venezuella, which seems to be a place of anti-happiness despite its OUTSANDINGLY HUGE GENEROSITY. 
+
+Central Europe and Baltic, Balkans countries are also very similar. Central Asia is heterogeneous: for example, Turkey is on the lower side of the plot, while Turkmenistan, Uzbekistan and Tajikistan are on the top part. Also, Turkmenistan seems to have much more freedom than Turkey, which seems REALLY STRANGE (maybe it is a mistake in a dataset, but probably it is because of the freedom is a perception metric). 
+
+But what region is clearly visible on the graph - this is Africa. African countries are certainly outsiders of this rating, they differ quite a lot due to the large number of different countries, but in general, it is clearly noticeable that this region is very different from all the others. The difference between Lesotho and Rwanda is huge - but not in terms of gdp or healthy life expectancy (these parameters are not very good for both countries), but mainly in terms of generosity, social support and freedom. South Asia is closer region to Africa and it is quite homogeneous.
+
+The most heterogeneous region is Middle East. Afghanistan, Lebanon, Saudi Arabia and Yemen are totally different. While Afghanistan is an absolute loser in the Happiness race, Lebanon and Iran are closer to the middle of the graph, and citizens of Bahrain and Saudi Arabia seem to be quite happy living in these countries. 
+
+### Interactive Plot
+
+Hover the mouse on the point or vector to see what the country/factor is represented by this element.
+
+```{r}
+p1 = ggplot(coef_vec, aes(x = coef_vec$model$X[,1], y = coef_vec$model$X[,2], 
+                         label = row.names(coef_vec$model$X),color = regions)) +
+  geom_point() +
+  labs(x="",y="",title="Interactive Plot of Country Similarity by Happiness Factors") +
+  
+  # Vectors for creation of Biplot
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,1], yend = coef_vec$coefficients[2,1]), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,1]+0.2, y = coef_vec$coefficients[2,1],
+                 label = colnames(coef_vec$coefficients)[1]),
+             size=3) +
+  
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,2], yend = coef_vec$coefficients[2,2]), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,2], y = coef_vec$coefficients[2,2],label = colnames(coef_vec$coefficients)[2]),
+             size=3) +
+  
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,3], yend = coef_vec$coefficients[2,3]), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,3]+0.1, y = coef_vec$coefficients[2,3]-0.1,
+                 label = colnames(coef_vec$coefficients)[3]),
+             size=2) +
+  
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,4], yend = coef_vec$coefficients[2,4]), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,4], y = coef_vec$coefficients[2,4],label = colnames(coef_vec$coefficients)[4]),
+             size=3) +
+  
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,5], yend = coef_vec$coefficients[2,5]), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,5], y = coef_vec$coefficients[2,5],label = colnames(coef_vec$coefficients)[5]),
+             size=3) +
+  
+  geom_segment(aes(x = 0, y = 0, xend = coef_vec$coefficients[1,6], yend = coef_vec$coefficients[2,6]), 
+               arrow = arrow(length = unit(0.2, "cm"), type = "closed")) +
+  geom_label(aes(x = coef_vec$coefficients[1,6], y = coef_vec$coefficients[2,6]-0.1,
+                 label = colnames(coef_vec$coefficients)[6]),
+             size=3)
+
+ggplotly(p1)
+```
+
+
+## Results
+- Countries tend to cluster based on their region, but not all regions are homogeneous. Scandinavian, Western European, Oceania, and North American countries cluster together to the left side of the plot, while South Asia and  African countries are on the right side.
+
+- East Asia is heterogeneous, with countries such as South Korea and Hong Kong having higher GDP but lower social support and freedom values.
+
+- Central Europe and Baltic, Balkans countries are quite similar and homogeneous, while the Middle East is the most heterogeneous region, with Afghanistan, Lebanon, Saudi Arabia, and Yemen being vastly different.
+
+- The interactive plot reveals that most of the Latin American countries are somewhere in the middle of the graph, except for Venezuela, which seems to be a place of no happiness despite its high generosity.
+
+- When viewing various news articles that mention the list of countries according to the Happiness index, one may get the impression that these countries are similar, but the plot built using MDS helps to understand in more detail how similar or different these or those countries are in accordance with the measured factors quality of life. 
+
+
