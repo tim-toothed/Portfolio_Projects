@@ -1,0 +1,133 @@
+---
+title: "Hypothesis 1 Number of Previous Hits"
+author: "Timur Sharifullin"
+date: "2023-05-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(ggeffects)
+library(mgcv)
+```
+
+
+*Hypothesis 1.*
+The success of a given song is positively associated with the number of successful songs previously released by the artist, such that a higher number of previous successful songs in the artist's discography will increase the likelihood of the given song achieving success (becoming a hit).
+
+
+# Uploading data
+```{r}
+final_df = read.csv("Clean_Dataset.csv")
+final_df$Song_Success = factor(final_df$Song_Success, levels = c("none","hit"))
+final_df1 = final_df[,c("hit_n","Song_Success")]
+```
+
+# Outliers
+```{r}
+library(outliers)
+grubbs.test(filter(final_df1,hit_n<21)$hit_n)
+dataset = filter(final_df1,hit_n<17)
+nrow(dataset)
+```
+
+```{r}
+library(table1)
+library(flextable)
+dataset1 = dataset
+dataset1$hit_n = as.factor(dataset1$hit_n)
+label(dataset1$hit_n) = "Number of Previous Hits"
+
+dataset1$Song_Success = factor(dataset1$Song_Success,levels = c("hit", "none"), labels=c("Hit","Non-Hit"))
+
+final_model_desc = table1(~ hit_n| Song_Success, data=dataset1)
+final_model_desc
+
+t1flex(final_model_desc) %>% 
+  save_as_docx(path="hyp1.docx")
+```
+
+
+# GAM - Linear
+
+```{r}
+m_logit = glm(data = dataset, formula = Song_Success ~ hit_n,
+              family = binomial(link = "logit"))
+
+summary(m_logit)
+```
+
+## Linearity Assumption
+
+```{r}
+# Predict the probability (p) of song success
+probabilities <- predict(m_logit, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+
+# Select only numeric predictors
+mydata <- filter(dataset) %>% dplyr::select(hit_n)
+predictors <- colnames(mydata)
+# Bind the logit and tidying the data for plot
+
+mydata <- mydata %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+ggplot(mydata, aes(logit, predictor.value))+
+  geom_point(size = 2, alpha = 0.5) +
+  geom_smooth(method = "loess") + 
+  theme_bw() #+ 
+  #facet_wrap(~predictors, scales = "free_y")
+```
+
+
+# GAM - Smooth
+
+```{r}
+m_logit1 = gam(data = dataset, formula = Song_Success ~ s(hit_n),
+              family = binomial(link = "logit"),method = "REML")
+
+summary(m_logit1)
+```
+
+## K-Basis
+
+full convergence after 4 iterations.
+k' = 9.00, edf = 6.32.
+
+```{r}
+gam.check(m_logit1)
+```
+
+
+# Comparison
+
+```{r}
+AIC(m_logit, m_logit1)
+```
+
+Smooth Term significantly lower AIC
+
+```{r}
+anova(m_logit, m_logit1, test = "Chisq")
+```
+
+Significantly better.
+
+# Predicted Probabilities plot
+
+```{r}
+plot(ggpredict(m_logit))[[1]] + labs(title = NULL, y = "Predicted Probability of Hit", x ="Number of Previous Hits") + scale_y_continuous(breaks = seq(0,1,0.05))
+
+ggpredict(m_logit) %>% as.data.frame()
+```
+
+```{r}
+ggpredict(m_logit1) %>% as.data.frame()
+```
+
+
+

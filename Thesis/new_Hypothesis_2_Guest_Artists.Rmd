@@ -1,0 +1,61 @@
+---
+title: "Hypothesis 2"
+author: "Timur Sharifullin"
+date: "2023-05-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(stringr)
+library(dplyr)
+library(sjPlot)
+
+# Load Datates
+final_df = read.csv("Clean_Dataset.csv")
+
+final_df$higher_guest = if_else(final_df$is_feat == FALSE, -1, final_df$higher_guest)
+final_df$higher_guest = factor(final_df$higher_guest,labels = c("No guest","No","Yes"))
+final_df$Song_Success = factor(final_df$Song_Success, levels = c("none","hit"), labels=c("Non-Hit","Hit"))
+
+
+# Select variables
+final_df1 = final_df %>% dplyr::select(Song_Success,is_feat,higher_guest)
+final_df1
+```
+
+*Hypothesis 2.*
+The likelihood of the song achieving success (becoming a hit) will increase if the song is labeled as a collaboration with the artist that has a higher number of hits in their career than the main artist of the song.
+
+
+```{r}
+library(table1)
+library(flextable)
+dataset1 = final_df1
+label(dataset1$higher_guest) = "Presence of Guest Artists with Highest Status"
+
+final_model_desc = table1(~ higher_guest| Song_Success, data=dataset1)
+final_model_desc
+```
+
+
+# GLM - higher_guest
+
+```{r}
+glm_higher = glm(Song_Success~higher_guest,data = final_df1, family = binomial)
+
+summary(glm_higher)
+```
+
+```{r}
+glm_higher = glm(Song_Success~higher_guest,data = final_df1, family = binomial)
+
+summary(glm_higher)
+
+plot(ggpredict(glm_higher))[[1]] + labs(title=NULL, y = "Predicted Probability of Hit", x = "Presence of guest performers with a higher number of hits") + scale_fill_manual(values = c("black", "red", "black"))
+
+as.data.frame()
+```
+
+
+

@@ -1,0 +1,976 @@
+---
+title: "Final_Full_GAM2"
+author: "Timur Sharifullin"
+date: "2023-05-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(gridExtra)
+library(grid)
+library(mgcv)
+library(sjPlot)
+final_df = read.csv("Clean_Dataset.csv")
+```
+
+```{r}
+
+final_df$higher_guest = factor(final_df$higher_guest,labels = c("No","Yes"))
+
+final_df1 = final_df %>% dplyr::select(-"artist_name",-"status_guest",-"n_feat","is_feat")
+
+final_df1$Song_Success = factor(final_df1$Song_Success, levels = c("none","hit"), labels=c("Non-Hit","Hit"))
+
+
+final_df2 = final_df1[final_df1$hit_n < 17,]
+
+final_df2
+```
+
+# Descriptive Statistics
+```{r}
+library(table1)
+library(flextable)
+label(final_df2$higher_guest) = "Presence of Guest Artists with Higher Status"
+
+final_df2$hit_n = as.factor(final_df2$hit_n)
+label(final_df2$hit_n) = "Number of Previous Hits"
+
+label(final_df2$Drums_Energy) = "Drums Energy"
+label(final_df2$Drums_Complexity) = "Drums Complexity"
+label(final_df2$Variety_of_musical_instruments) = "Variety of Musical Instruments"
+label(final_df2$Harmonic_Richness) = "Harmonic Richness"
+label(final_df2$Emotional_Intensity) = "Emotional Intensity"
+label(final_df2$Mixing_Quality) = "Mixing Quality"
+
+final_model_desc = table1(~ as.factor(hit_n) + higher_guest +
+                            Drums_Energy + Drums_Complexity + Variety_of_musical_instruments + Harmonic_Richness +
+                            Emotional_Intensity| Song_Success, data=final_df2)
+final_model_desc
+
+final_df2$hit_n = as.numeric(final_df2$hit_n)-1
+
+#t1flex(final_model_desc) %>% 
+#  save_as_docx(path="final_model_desc.docx")
+```
+
+# Base Model
+```{r}
+gam_full1 = gam(Song_Success ~
+              hit_n +
+              higher_guest +
+              s(Drums_Energy) +
+              s(Drums_Complexity) +
+              s(Variety_of_musical_instruments) +
+              s(Harmonic_Richness) +
+              s(Emotional_Intensity),
+            data = final_df2,
+            family = binomial(link="logit"),
+            method = "REML")
+summary(gam_full1)
+```
+
+```{r}
+k.check(gam_full1)
+```
+
+
+# Outliers
+
+```{r}
+# initial model to find k-value
+# - gam_full1
+
+
+# model without penalization with ceiling(k)+1
+gam_7_1 = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                s(Drums_Energy, k = ceiling(k.check(gam_full1)[1,2])+1, fx = TRUE) +
+                s(Drums_Complexity, k = ceiling(k.check(gam_full1)[2,2])+1, fx = TRUE) +
+                s(Variety_of_musical_instruments, k = ceiling(k.check(gam_full1)[3,2])+1, fx = TRUE) +
+                s(Harmonic_Richness, k = ceiling(k.check(gam_full1)[4,2])+1, fx = TRUE) +
+                s(Emotional_Intensity, k = ceiling(k.check(gam_full1)[5,2])+1, fx = TRUE),
+            data = final_df2,
+            family = binomial(link="logit"),
+            method = "REML")
+
+# Influential values (Outliers)
+inf = influence.gam(gam_7_1)
+cook = cooks.distance(gam_7_1)
+final_df2$inf = inf
+final_df2$cook = cook
+par(mfrow=c(1,2))
+plot(inf,ylab = "Hat-value")
+abline(h=0.0075, col="red")
+plot(cook,ylab = "Cook's  Distance")
+abline(h=0.001, col="red")
+
+# New Dataset
+final_df3 = subset(final_df2, inf < 0.0075 & cook <0.001)
+
+# Final Model
+gam_7_final = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                s(Drums_Energy) +
+                s(Drums_Complexity) +
+                s(Variety_of_musical_instruments) +
+                s(Harmonic_Richness) +
+                s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+summary(gam_7_final)
+```
+
+```{r}
+nrow(final_df3)-nrow(final_df2)
+```
+
+
+```{r}
+# Base model
+gam_7_final
+```
+
+
+```{r}
+gam_7_energy = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                s(Drums_Energy) +
+                s(Drums_Complexity) +
+                s(Variety_of_musical_instruments) +
+                s(Harmonic_Richness) +
+                Emotional_Intensity,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+AIC(gam_7_final,gam_7_energy)
+anova(gam_7_final,gam_7_energy,test="Chisq") %>% as.data.frame()
+```
+
+# Model without interactive effects
+
+```{r}
+gam_7_final_f = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                Drums_Energy +
+                s(Drums_Complexity) +
+                s(Variety_of_musical_instruments) +
+                s(Harmonic_Richness) +
+                s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+summary(gam_7_final_f)
+```
+
+# Predicted Probs
+```{r}
+library(ggeffects)
+pred = ggpredict(gam_7_final_f)
+
+p1 = plot(pred)[[1]] +
+  labs(title = NULL, x = "Number of Previous Hits\n",y = NULL) +
+  scale_y_continuous(breaks = seq(0,1,0.1)) +
+  coord_cartesian(ylim = c(0,0.6))
+
+p2 = plot(pred)[[2]] +
+  labs(title = NULL,x = "Presence of Guest Artists\nwith Higher Status",y = NULL) +
+  scale_y_continuous(breaks = seq(0,1,0.1)) +
+  coord_cartesian(ylim = c(0,0.6))
+
+p3 = plot(pred)[[3]] +
+  labs(title = NULL,x = "Dissimilarity by\nDrums Energy",y = NULL) +
+  scale_y_continuous(breaks = seq(0,1,0.1)) +
+  coord_cartesian(ylim = c(0,0.6))
+
+p4 = plot(pred)[[4]] +
+  labs(title = NULL,x = "Dissimilarity by\nDrums Complexity",y = NULL) +
+  scale_y_continuous(breaks = seq(0,1,0.1)) +
+  coord_cartesian(ylim = c(0,0.6))
+
+p5 = plot(pred)[[5]] +
+  labs(title = NULL,x = "Dissimilarity by\nVariety of Musical Instruments",y = NULL) +
+  scale_y_continuous(breaks = seq(0,1,0.1)) +
+  coord_cartesian(ylim = c(0,0.6))
+
+p6 = plot(pred)[[6]] +
+  labs(title = NULL,x = "Dissimilarity by\nHarmonic Richness",y = NULL) +
+  scale_y_continuous(breaks = seq(0,1,0.1)) +
+  coord_cartesian(ylim = c(0,0.6))
+
+p7 = plot(pred)[[7]] +
+  labs(title = NULL,x = "Dissimilarity by\nEmotional Intensity",y = NULL) +
+  scale_y_continuous(breaks = seq(0,1,0.1)) +
+  coord_cartesian(ylim = c(0,0.6))
+
+combined_plot = grid.arrange(p3,p4,p5,p6,p7, #p1,p2, 
+                             left = "Predicted Probability of Hit",
+                             nrow=2, ncol=3)
+
+# -----------------------------------------
+
+datka = ggpredict(u5) %>% as.data.frame()
+
+ggpredict(u5) 
+summary(u5)
+```
+
+
+
+
+# Model with Interactive Effects
+
+```{r}
+gam_7_final_it = gam(Song_Success ~ 
+                hit_n +
+                higher_guest*hit_n +
+                Drums_Energy +
+                s(Drums_Complexity) +
+                s(Variety_of_musical_instruments) +
+                s(Harmonic_Richness) +
+                s(Emotional_Intensity,by = hit_n),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+summary(gam_7_final_it)
+```
+
+```{r}
+AIC(gam_7_final_f,gam_7_final_it)
+anova(gam_7_final_f,gam_7_final_it, test = "Chisq")
+```
+
+
+## hit_n
+
+```{r}
+hit1 = gam(Song_Success ~ 
+                hit_n +
+                higher_guest*hit_n +
+                Drums_Energy +
+                s(Drums_Complexity) +
+                s(Variety_of_musical_instruments) +
+                s(Harmonic_Richness) +
+                s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+hit2 = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                Drums_Energy +
+                s(Drums_Complexity, by = hit_n) +
+                s(Variety_of_musical_instruments) +
+                s(Harmonic_Richness) +
+                s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+hit3 = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                Drums_Energy +
+                s(Drums_Complexity) +
+                s(Variety_of_musical_instruments, by = hit_n) +
+                s(Harmonic_Richness) +
+                s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+hit4 = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                Drums_Energy +
+                s(Drums_Complexity) +
+                s(Variety_of_musical_instruments) +
+                s(Harmonic_Richness, by = hit_n) +
+                s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+hit5 = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                Drums_Energy +
+                s(Drums_Complexity) +
+                s(Variety_of_musical_instruments) +
+                s(Harmonic_Richness) +
+                s(Emotional_Intensity,by=hit_n),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+summary(hit5)
+```
+
+
+```{r}
+plot_hit1 = plot_model(hit1,
+           type = "pred",
+           terms = c("higher_guest","hit_n[0,1,5,12,16]"),
+           title = NULL,
+           legend.title = "Number of previous hits") + labs(x="Guest with higher N of hits",y=NULL,title=NULL)
+
+plot_hit2 = plot_model(hit2,
+           type = "pred",
+           terms = c("Drums_Complexity","hit_n[0,1,5,12,16]"),
+           title = NULL) + labs(x = "Dissimilarity by\nDrums Complexity",y=NULL,title=NULL) + theme(legend.position = "none")
+
+plot_hit3 = plot_model(hit3,
+           type = "pred",
+           terms = c("Variety_of_musical_instruments","hit_n[0,1,5,12,16]"),
+           title = NULL) + labs(x="Dissimilarity by\nVariety of instruments",y=NULL,title=NULL) + theme(legend.position = "none")
+
+plot_hit4 = plot_model(hit4,
+           type = "pred",
+           terms = c("Harmonic_Richness","hit_n[0,1,5,12,16]"),
+           title = NULL) + labs(x="Dissimilarity by\nHarmonic Richness",y=NULL,title=NULL) + theme(legend.position = "none")
+
+plot_hit5 = plot_model(hit5,
+           type = "pred",
+           terms = c("Emotional_Intensity","hit_n[0,1,5,12,16]"),
+           title = NULL) + labs(x="Dissimilarity by\nEmotional Intensity",y=NULL,title=NULL) + theme(legend.position = "none")
+
+plot = plot_hit1
+# get tabular interpretation of plot
+plot_table <- ggplot_gtable(ggplot_build(plot)) 
+#  Mark only legend in plot
+legend_plot <- which(sapply(plot_table$grobs, function(x) x$name) == "guide-box") 
+# extract legend
+legend <- plot_table$grobs[[legend_plot]]
+
+grid.arrange(plot_hit2,plot_hit3,plot_hit4,plot_hit5,plot_hit1 + theme(legend.position = "none"),
+                             legend,
+                             left = "Predicted Probability of Hit",
+                             nrow=2, ncol=3)
+```
+
+
+# higher_guest
+```{r}
+higher2 = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                Drums_Energy +
+                s(Drums_Complexity, higher_guest, bs="fs") +
+                s(Variety_of_musical_instruments) +
+                s(Harmonic_Richness) +
+                s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+higher3 = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                Drums_Energy +
+                s(Drums_Complexity) +
+                s(Variety_of_musical_instruments, higher_guest, bs="fs") +
+                s(Harmonic_Richness) +
+                s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+higher4 = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                Drums_Energy +
+                s(Drums_Complexity) +
+                s(Variety_of_musical_instruments) +
+                s(Harmonic_Richness, higher_guest, bs="fs") +
+                s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+higher5 = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                Drums_Energy +
+                s(Drums_Complexity) +
+                s(Variety_of_musical_instruments) +
+                s(Harmonic_Richness) +
+                s(Emotional_Intensity, higher_guest, bs="fs"),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+```
+
+```{r}
+plot_higher2 = plot_model(higher2,
+           type = "pred",
+           terms = c("Drums_Complexity","higher_guest"),
+           title = NULL,
+           legend.title = "Guest with higher N of hits") +
+  labs(x = "Dissimilarity by\nDrums Complexity",y=NULL,title=NULL) +
+  scale_color_manual(values = c("red","darkorange")) +
+  scale_fill_manual(values = c("red","darkorange"))
+  
+
+plot_higher3 = plot_model(higher3,
+           type = "pred",
+           terms = c("Variety_of_musical_instruments","higher_guest"),
+           title = NULL) +
+  labs(x="Dissimilarity by\nVariety of instruments",y=NULL,title=NULL) +
+  theme(legend.position = "none") +
+  scale_color_manual(values = c("red","darkorange")) +
+  scale_fill_manual(values = c("red","darkorange"))
+
+plot_higher4 = plot_model(higher4,
+           type = "pred",
+           terms = c("Harmonic_Richness","higher_guest"),
+           title = NULL) +
+  labs(x="Dissimilarity by\nHarmonic Richness",y=NULL,title=NULL) +
+  theme(legend.position = "none") +
+  scale_color_manual(values = c("red","darkorange")) +
+  scale_fill_manual(values = c("red","darkorange"))
+
+plot_higher5 = plot_model(higher5,
+                          type = "pred",
+                          terms = c("Emotional_Intensity","higher_guest"),
+                          title = NULL) + 
+  labs(x="Dissimilarity by\nEmotional Intensity",y=NULL,title=NULL) + 
+  theme(legend.position = "none") +
+  scale_color_manual(values = c("red","darkorange")) +
+  scale_fill_manual(values = c("red","darkorange"))
+
+plot = plot_higher2
+# get tabular interpretation of plot
+plot_table <- ggplot_gtable(ggplot_build(plot)) 
+#  Mark only legend in plot
+legend_plot <- which(sapply(plot_table$grobs, function(x) x$name) == "guide-box") 
+# extract legend
+legend <- plot_table$grobs[[legend_plot]]
+
+grid.arrange(plot_higher2 + theme(legend.position = "none"),
+             plot_higher3,plot_higher4,plot_higher5, legend,
+             left = "Predicted Probability of Hit",
+             nrow=2, ncol=3)
+```
+
+
+
+
+```{r}
+gam_7_final_ti = gam(Song_Success ~ 
+                  hit_n +
+                  higher_guest +
+                  Drums_Energy +
+                  Drums_Complexity +
+                  Variety_of_musical_instruments +
+                  Emotional_Intensity +
+                  s(Harmonic_Richness) +
+                  s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+summary(gam_7_final_ti)
+
+AIC(gam_7_final_f,gam_7_final_ti)
+anova(gam_7_final_f,gam_7_final_ti, test = "Chisq")
+```
+
+higher_guest*Drums_Energy - no sign
+higher_guest*Drums_Complexity - sign
+higher_guest*Variety_of_musical_instruments - non-sign
+higher_guest*Harmonic_Richness - non-sign
+higher_guest*Emotional_Intensity - sign but worsen the model
+
+```{r}
+gam_7_final_ti = gam(Song_Success ~ 
+                  hit_n +
+                  higher_guest +
+                  Drums_Energy +
+                  Drums_Complexity +
+                  Variety_of_musical_instruments +
+                  s(Harmonic_Richness) +
+                  ti(Drums_Energy,Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+summary(gam_7_final_ti)
+
+AIC(gam_7_final_f,gam_7_final_ti)
+anova(gam_7_final_f,gam_7_final_ti, test = "Chisq")
+```
+
+Drums_Energy*Drums_Complexity - non-sign (0.136642)
+Drums_Energy*Variety_of_musical_instruments - non-sign (0.2787)
+ti(Drums_Energy,Harmonic_Richness) - non-sign (0.115)
+ti(Drums_Energy,Emotional_Intensity) - sign (0.00198), but worsen the model (anova: 12800     9355.9 -2.5336  -44.968 4.418e-10 ***, aic:15.19727	9386.327)
+
+```{r}
+gam_7_final_ti = gam(Song_Success ~ 
+                  hit_n +
+                  higher_guest +
+                  Drums_Energy +
+                  Drums_Complexity +
+                  Variety_of_musical_instruments +
+                  s(Harmonic_Richness) +
+                  ti(Drums_Complexity,Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+summary(gam_7_final_ti)
+
+AIC(gam_7_final_f,gam_7_final_ti)
+anova(gam_7_final_f,gam_7_final_ti, test = "Chisq")
+```
+
+Drums_Complexity*Variety_of_musical_instruments - non-sign
+Drums_Complexity*Harmonic_Richness - non-sign (0.654)
+ti(Drums_Complexity,Emotional_Intensity) - sign (7.33e-08), worsen the model fit not significantly (anova: 12794     9322.9 3.2179   -11.96, aic: 20.05922	9363.043)
+
+```{r}
+gam_7_final_ti = gam(Song_Success ~ 
+                  hit_n +
+                  higher_guest +
+                  Drums_Energy +
+                  Drums_Complexity +
+                  Variety_of_musical_instruments +
+                  s(Harmonic_Richness) +
+                  ti(Variety_of_musical_instruments,Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+summary(gam_7_final_ti)
+
+AIC(gam_7_final_f,gam_7_final_ti)
+anova(gam_7_final_f,gam_7_final_ti, test = "Chisq")
+```
+
+ti(Variety_of_musical_instruments,Harmonic_Richness) - non-sign (0.224)
+ti(Variety_of_musical_instruments,Emotional_Intensity) - non-sign (0.84868)
+
+```{r}
+gam_7_final_ti = gam(Song_Success ~ 
+                  hit_n +
+                  higher_guest +
+                  Drums_Energy +
+                  Drums_Complexity +
+                  Variety_of_musical_instruments +
+                  s(Harmonic_Richness) +
+                  ti(Harmonic_Richness,Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+summary(gam_7_final_ti)
+
+AIC(gam_7_final_f,gam_7_final_ti)
+anova(gam_7_final_f,gam_7_final_ti, test = "Chisq")
+```
+
+ti(Harmonic_Richness,Emotional_Intensity) - non-significant (0.17118)
+
+
+# Final Final Model
+
+```{r}
+m1 = gam(Song_Success ~ 
+                hit_n,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m2 = gam(Song_Success ~ 
+           hit_n +
+           higher_guest,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m2_int_hit_n = gam(Song_Success ~ 
+           hit_n +
+           higher_guest +
+           higher_guest*hit_n,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+AIC(m1,m2,m2_int_hit_n)
+anova(m1,m2,m2_int_hit_n,test="Chisq")
+```
+
+Interaction Term higher_guest*hit_n is important
+
+```{r}
+summary(m2_int_hit_n)
+```
+
+Interaction Term higher_guest*hit_n is significant
+
+```{r}
+m1 = gam(Song_Success ~ 
+            Drums_Energy,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1s = gam(Song_Success ~ hit_n +
+            s(Drums_Energy),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_hit_n_s = gam(Song_Success ~ 
+           s(Drums_Energy,hit_n),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_hit_n = gam(Song_Success ~ 
+           Drums_Energy*hit_n,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_higher = gam(Song_Success ~ 
+           Drums_Energy*higher_guest,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+AIC(m1,m1_int_hit_n,m1_int_higher)
+anova(m1,m1_int_hit_n,m1_int_higher,test="Chisq")
+```
+
+Drums_Energy*hit_n is important (m1_int_hit_n)
+
+```{r}
+summary(m1_int_hit_n)
+summary(m1_int_hit_n_s)
+summary(m1_int_higher)
+```
+
+Drums_Energy*hit_n is not significant
+Drums_Energy*higher_guestYes is not significant
+s(Drums_Energy,hit_n) is significant
+
+```{r}
+plot_model(m1s,type="pred", terms = c("Drums_Energy", "hit_n[0,5,12,16]"))
+```
+
+```{r}
+m1 = gam(Song_Success ~ 
+            Drums_Complexity,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1s = gam(Song_Success ~ hit_n +
+            s(Drums_Complexity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_hit_n_s = gam(Song_Success ~ 
+           s(Drums_Complexity,hit_n),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_hit_n = gam(Song_Success ~ 
+           Drums_Complexity*hit_n,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_higher = gam(Song_Success ~ 
+           Drums_Complexity*higher_guest,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+AIC(m1,m1_int_hit_n,m1_int_higher)
+anova(m1,m1_int_hit_n,m1_int_higher,test="Chisq")
+```
+
+Drums_Complexity*hit_n is important (m1_int_hit_n)
+
+```{r}
+summary(m1_int_hit_n)
+summary(m1_int_higher)
+summary(m1_int_hit_n_s)
+```
+
+Drums_Complexity*hit_n is not significant
+Drums_Complexity*higher_guestYes is significant
+s(Drums_Complexity,hit_n) is significant
+
+```{r}
+plot_model(m1s,type="pred", terms = c("Drums_Complexity", "hit_n[0,5,12,16]"))
+```
+
+
+```{r}
+m1 = gam(Song_Success ~ 
+            Variety_of_musical_instruments,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1s = gam(Song_Success ~ hit_n +
+            s(Variety_of_musical_instruments),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_hit_n = gam(Song_Success ~ 
+           Variety_of_musical_instruments*hit_n,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_hit_n_s = gam(Song_Success ~ 
+           s(Variety_of_musical_instruments,hit_n),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_higher = gam(Song_Success ~ 
+           Variety_of_musical_instruments*higher_guest,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+AIC(m1,m1_int_hit_n,m1_int_higher)
+anova(m1,m1_int_hit_n,m1_int_higher,test="Chisq")
+```
+
+s(Variety_of_musical_instruments,hit_n) is important
+Variety_of_musical_instruments*hit_n is important
+
+```{r}
+summary(m1_int_hit_n)
+summary(m1_int_higher)
+summary(m1_int_hit_n_s)
+```
+
+s(Variety_of_musical_instruments,hit_n) significant
+
+```{r}
+plot_model(m1s,type="pred", terms = c("Variety_of_musical_instruments", "hit_n[0,5,12,16]"))
+```
+
+
+```{r}
+m1 = gam(Song_Success ~ 
+            Harmonic_Richness,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1s = gam(Song_Success ~ hit_n +
+            s(Harmonic_Richness),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1s_int_hit_n = gam(Song_Success ~ 
+            s(Harmonic_Richness,hit_n),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_hit_n = gam(Song_Success ~ 
+           Harmonic_Richness*hit_n,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_higher = gam(Song_Success ~ 
+           Harmonic_Richness*higher_guest,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+
+AIC(m1,m1s,m1s_int_hit_n,m1_int_hit_n,m1_int_higher)
+anova(m1,m1s,m1s_int_hit_n,m1_int_hit_n,m1_int_higher,test="Chisq")
+```
+
+s(Harmonic_Richness, hit_n) - interaction term is important
+
+```{r}
+summary(m1s_int_hit_n)
+summary(m1_int_hit_n)
+summary(m1_int_higher)
+```
+Harmonic_Richness*hit_n is significant
+s(Harmonic_Richness,hit_n) is significant
+Harmonic_Richness*higher_guestYes is not
+
+```{r}
+plot_model(m1s,type="pred", terms = c("Harmonic_Richness", "hit_n[0,5,12,16]"))
+```
+
+
+
+```{r}
+m1 = gam(Song_Success ~ 
+            Emotional_Intensity,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1s = gam(Song_Success ~ hit_n +
+            s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1s_int_hit_n = gam(Song_Success ~ 
+            s(Emotional_Intensity,hit_n),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_hit_n = gam(Song_Success ~ 
+           Emotional_Intensity*hit_n,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+m1_int_higher = gam(Song_Success ~ 
+           Emotional_Intensity*higher_guest,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+
+AIC(m1,m1s,m1s_int_hit_n,m1_int_hit_n,m1_int_higher)
+anova(m1,m1s,m1s_int_hit_n,m1_int_hit_n,m1_int_higher,test="Chisq")
+```
+
+s(Emotional_Intensity,hit_n) is important
+
+```{r}
+summary(m1s_int_hit_n)
+summary(m1_int_hit_n)
+summary(m1_int_higher)
+```
+
+s(Emotional_Intensity,hit_n) is significant
+Emotional_Intensity*hit_n is not
+Emotional_Intensity*higher_guestYes is significant
+
+```{r}
+plot_model(m1s,type="pred", terms = c("Emotional_Intensity", "hit_n[0,5,12,16]"))
+vis.gam(m1s_int_hit_n)
+```
+
+# Additional
+
+```{r}
+m_aaa = gam(Song_Success ~ 
+                higher_guest*hit_n +
+                s(Drums_Energy,hit_n) +
+                s(Drums_Complexity,hit_n) +
+                s(Variety_of_musical_instruments,hit_n) +
+                s(Harmonic_Richness,hit_n) +
+                s(Emotional_Intensity,hit_n),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+summary(m_aaa)
+```
+
+
+
+
+```{r}
+m10 = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                higher_guest*hit_n +
+                Drums_Energy +
+                Drums_Complexity +
+                higher_guest*Drums_Complexity +
+                Variety_of_musical_instruments +
+                s(Harmonic_Richness) +
+                s(Emotional_Intensity),
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+gam_7_final_final = gam(Song_Success ~ 
+                hit_n +
+                higher_guest +
+                higher_guest*hit_n +
+                Drums_Energy +
+                Drums_Complexity +
+                higher_guest*Drums_Complexity +
+                Variety_of_musical_instruments +
+                s(Harmonic_Richness) +
+                higher_guest*Emotional_Intensity,
+            data = final_df3,
+            family = binomial,
+            method = "REML")
+
+summary(gam_7_final_final)
+```
+
+```{r}
+
+```
+
+
+```{r}
+plot_model(gam_7_final_final, pred.type = )
+```
+
+# No Concurvity
+
+```{r}
+concurvity(gam_7_final,full=TRUE)%>% as.data.frame() %>% round(3)
+```
+
+# No multicollinearity
+
+```{r}
+library(corrtable)
+df_cor = final_df3[,c(4:7,9,11,13)]
+df_cor$higher_guest = as.numeric(df_cor$higher_guest)-1
+
+correlation_matrix(df = df_cor,
+                        type = "spearman",
+                        use = "lower",
+                        show_significance = TRUE)
+
+save_correlation_matrix(df = df_cor,
+                        type = "spearman",
+                        use = "lower",
+                        show_significance = TRUE,
+                        filename = "cor_table_audio.csv")
+```
+
+# k check
+
+```{r}
+gam.check(gam_7_final_f)
+```
+
+
+
+

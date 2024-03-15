@@ -1,0 +1,514 @@
+---
+title: "21 Hypothesis 2_with_log_reg"
+author: "Timur Sharifullin"
+date: "2023-04-26"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(gridExtra)
+library(grid)
+library(mgcv)
+library(ggeffects)
+final_df = read.csv("Clean_Dataset.csv")
+```
+
+
+*Hypothesis 3.*
+The relationship between the sound originality and the likelihood of the song achieving success (becoming a hit) is inverted U-shaped. As the degree of sound originality of the song increases, the likelihood of the song becoming a hit will increase up to a certain point. However, if the degree of sound originality exceeds a certain point, this will lead to a decrease in likelihood of the song becoming a hit.
+
+
+```{r}
+final_df1 = final_df %>% dplyr::select(-"artist_name",-"album_release_date",-"hit_n",-"is_feat",-"n_feat")
+final_df1$Song_Success = factor(final_df1$Song_Success, levels = c("none","hit"))
+
+final_df1 = final_df1[!duplicated(final_df1[,1]),] %>% dplyr::select(-track_id)
+
+head(final_df1)
+```
+
+# Descriptive Stats
+```{r}
+p1 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,2],fill = Song_Success), bins=1000) +
+      labs(x = "Drums Energy",fill="Song Success") +
+      scale_fill_discrete(labels = c("Non-Hit","Hit")) +
+      theme(legend.position = "bottom",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p2 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,3],fill = Song_Success), bins=1000) +
+      labs(x = "Drums Complexity") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p3 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,4],fill = Song_Success), bins=1000) +
+      labs(x = "Variety of Musical Instruments") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p4 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[, 5],fill = Song_Success), bins=1000) +
+      labs(x = "Harmonic Richness") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p5 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,6],fill = Song_Success), bins=1000) +
+      labs(x = "Emotional Intensity") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p6 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,7],fill = Song_Success), bins=1000) +
+      labs(x = "Mixing Quality") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p7 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,8],fill = Song_Success), bins=1000) +
+      labs(x = "Mixing Character") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+plot = p1
+# get tabular interpretation of plot
+plot_table <- ggplot_gtable(ggplot_build(plot)) 
+#  Mark only legend in plot
+legend_plot <- which(sapply(plot_table$grobs, function(x) x$name) == "guide-box") 
+# extract legend
+legend <- plot_table$grobs[[legend_plot]]
+
+combined_plot = grid.arrange(p1 + theme(legend.position="none"),p2,p3,
+                             p4,p5,p6,p7,legend,
+                             left = "Count", bottom = "Audio Feature Dissimilarity")
+
+```
+
+
+```{r}
+library(car)
+vec = final_df1$Drums_Energy %in% boxplot.stats(final_df1$Drums_Energy)$out
+d_energy = final_df1[!vec,]
+
+vec = final_df1$Drums_Complexity %in% boxplot.stats(final_df1$Drums_Complexity)$out
+d_complex = final_df1[!vec,]
+
+vec = final_df1$Variety_of_musical_instruments %in% boxplot.stats(final_df1$Variety_of_musical_instruments)$out
+d_variety = final_df1[!vec,]
+
+vec = final_df1$Harmonic_Richness %in% boxplot.stats(final_df1$Harmonic_Richness)$out
+d_h_rich = final_df1[!vec,]
+
+vec = final_df1$Emotional_Intensity %in% boxplot.stats(final_df1$Emotional_Intensity)$out
+d_emot = final_df1[!vec,]
+
+vec = final_df1$Mixing_Quality %in% boxplot.stats(final_df1$Mixing_Quality)$out
+d_m_qual = final_df1[!vec,]
+
+vec = final_df1$Mixing_Character %in% boxplot.stats(final_df1$Mixing_Character)$out
+d_m_char = final_df1[!vec,]
+```
+
+# Descriptive Statistics 2
+
+```{r}
+p1 = ggplot(data = d_energy) +
+      geom_histogram(aes(x = d_energy$Drums_Energy,fill = Song_Success), bins=1000) +
+      labs(x = "Drums Energy",fill="Song Success") +
+      scale_fill_discrete(labels = c("Non-Hit","Hit")) +
+      theme(legend.position = "bottom",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p2 = ggplot(data = d_complex) +
+      geom_histogram(aes(x = d_complex$Drums_Complexity,fill = Song_Success), bins=1000) +
+      labs(x = "Drums Complexity") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p3 = ggplot(data = d_variety) +
+      geom_histogram(aes(x = d_variety$Variety_of_musical_instruments,fill = Song_Success), bins=1000) +
+      labs(x = "Variety of Musical Instruments") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p4 = ggplot(data = d_h_rich) +
+      geom_histogram(aes(x = d_h_rich$Harmonic_Richness,fill = Song_Success), bins=1000) +
+      labs(x = "Harmonic Richness") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p5 = ggplot(data = d_emot) +
+      geom_histogram(aes(x = d_emot$Mixing_Quality,fill = Song_Success), bins=1000) +
+      labs(x = "Emotional Intensity") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p6 = ggplot(data = d_m_qual) +
+      geom_histogram(aes(x = d_m_qual$Mixing_Quality,fill = Song_Success), bins=1000) +
+      labs(x = "Mixing Quality") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+p7 = ggplot(data = d_m_char) +
+      geom_histogram(aes(x = d_m_char$Mixing_Character,fill = Song_Success), bins=1000) +
+      labs(x = "Mixing Character") +
+      theme(legend.position = "none",
+            axis.title.x = element_text(size = 8),
+            axis.title.y = element_blank())
+
+plot = p1
+# get tabular interpretation of plot
+plot_table <- ggplot_gtable(ggplot_build(plot)) 
+#  Mark only legend in plot
+legend_plot <- which(sapply(plot_table$grobs, function(x) x$name) == "guide-box") 
+# extract legend
+legend <- plot_table$grobs[[legend_plot]]
+
+combined_plot = grid.arrange(p1 + theme(legend.position="none"),p2,p3,
+                             p4,p5,p6,p7,legend,
+                             left = "Count", bottom = "Audio Feature Dissimilarity")
+```
+
+
+# Univariate models
+```{r}
+u1 = gam(Song_Success~s(Drums_Energy),data = d_energy, family = binomial,method = "REML")
+u2 = gam(Song_Success~s(Drums_Complexity),data = d_complex,family = binomial,method = "REML")
+u3 = gam(Song_Success~s(Variety_of_musical_instruments),data = d_variety, family = binomial,method = "REML")
+u4 = gam(Song_Success~s(Harmonic_Richness),data = d_h_rich, family = binomial,method = "REML")
+u5 = gam(Song_Success~s(Emotional_Intensity),data = d_emot, family = binomial,method = "REML")
+u6 = gam(Song_Success~s(Mixing_Quality),data = d_m_qual, family = binomial,method = "REML")
+u7 = gam(Song_Success~s(Mixing_Character),data = d_m_char, family = binomial,method = "REML")
+
+summary(u1)$s.table
+summary(u2)$s.table
+summary(u3)$s.table
+summary(u4)$s.table
+summary(u5)$s.table
+summary(u6)$s.table
+summary(u7)$s.table
+```
+
+0.0002500438 - sign
+0.005381333 - sign
+0.0000771487 - sign
+0.02512154 - sign
+0.001158294 - sign
+0.2851457 - no
+0.5519767 -  no
+
+
+```{r}
+l1 = gam(Song_Success~Drums_Energy,data = d_energy, family = binomial,method = "REML")
+l2 = gam(Song_Success~Drums_Complexity,data = d_complex,family = binomial,method = "REML")
+l3 = gam(Song_Success~Variety_of_musical_instruments,data = d_variety, family = binomial,method = "REML")
+l4 = gam(Song_Success~Harmonic_Richness,data = d_h_rich, family = binomial,method = "REML")
+l5 = gam(Song_Success~Emotional_Intensity,data = d_emot, family = binomial,method = "REML")
+l6 = gam(Song_Success~Mixing_Quality,data = d_m_qual, family = binomial,method = "REML")
+l7 = gam(Song_Success~Mixing_Character,data = d_m_char, family = binomial,method = "REML")
+
+summary(l7)
+```
+
+```{r}
+# Predict the probability (p) of song success
+probabilities <- predict(l1, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+
+# Select only numeric predictors
+mydata <- filter(d_energy) %>% dplyr::select(Drums_Energy)
+predictors <- colnames(mydata)
+# Bind the logit and tidying the data for plot
+
+mydata <- mydata %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+p1 = ggplot(mydata, aes(logit, predictor.value))+
+  geom_point(size = 0.05, alpha = 0.8) +
+  theme_bw() +
+  labs(y = "Dissimilarity by\nDrums Energy",x=NULL) +
+  coord_flip()
+
+# ------------------------------------------------------------------------
+  
+# Predict the probability (p) of song success
+probabilities <- predict(l2, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+
+# Select only numeric predictors
+mydata <- filter(d_complex) %>% dplyr::select(Drums_Complexity)
+predictors <- colnames(mydata)
+# Bind the logit and tidying the data for plot
+
+mydata <- mydata %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+p2 = ggplot(mydata, aes(logit, predictor.value))+
+  geom_point(size = 0.05, alpha = 0.8) + 
+  theme_bw() +
+  labs(y = "Dissimilarity by\nDrums Complexity",x=NULL) +
+  coord_flip()
+
+# ------------------------------------------------------------------------
+  
+# Predict the probability (p) of song success
+probabilities <- predict(l3, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+
+# Select only numeric predictors
+mydata <- filter(d_variety) %>% dplyr::select(Variety_of_musical_instruments)
+predictors <- colnames(mydata)
+# Bind the logit and tidying the data for plot
+
+mydata <- mydata %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+p3 = ggplot(mydata, aes(logit, predictor.value))+
+  geom_point(size = 0.05, alpha = 0.8) + 
+  theme_bw() +
+  labs(y = "Dissimilarity by\nVariety of Musical Instruments",x=NULL) +
+  coord_flip()
+
+# ------------------------------------------------------------------------
+  
+# Predict the probability (p) of song success
+probabilities <- predict(l4, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+
+# Select only numeric predictors
+mydata <- filter(d_h_rich) %>% dplyr::select(Harmonic_Richness)
+predictors <- colnames(mydata)
+# Bind the logit and tidying the data for plot
+
+mydata <- mydata %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+p4 = ggplot(mydata, aes(logit, predictor.value))+
+  geom_point(size = 0.05, alpha = 0.8) + 
+  theme_bw() +
+  labs(y = "Dissimilarity by\nHarmonic Richness",x=NULL) +
+  coord_flip()
+
+# ------------------------------------------------------------------------
+  
+# Predict the probability (p) of song success
+probabilities <- predict(l5, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+
+# Select only numeric predictors
+mydata <- filter(d_emot) %>% dplyr::select(Emotional_Intensity)
+predictors <- colnames(mydata)
+# Bind the logit and tidying the data for plot
+
+mydata <- mydata %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+p5 = ggplot(mydata, aes(logit, predictor.value))+
+  geom_point(size = 0.05, alpha = 0.8) + 
+  theme_bw() +
+  labs(y = "Dissimilarity by\nEmotional Intensity",x=NULL) +
+  coord_flip()
+
+# ------------------------------------------------------------------------
+  
+# Predict the probability (p) of song success
+probabilities <- predict(l6, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+
+# Select only numeric predictors
+mydata <- filter(d_m_qual) %>% dplyr::select(Mixing_Quality)
+predictors <- colnames(mydata)
+# Bind the logit and tidying the data for plot
+
+mydata <- mydata %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+p6 = ggplot(mydata, aes(logit, predictor.value))+
+  geom_point(size = 0.05, alpha = 0.8) + 
+  theme_bw() +
+  labs(y = "Dissimilarity by\nMixing Quality",x=NULL) +
+  coord_flip()
+
+# ------------------------------------------------------------------------
+  
+# Predict the probability (p) of song success
+probabilities <- predict(l7, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+
+# Select only numeric predictors
+mydata <- filter(d_m_char) %>% dplyr::select(Mixing_Character)
+predictors <- colnames(mydata)
+# Bind the logit and tidying the data for plot
+
+mydata <- mydata %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+p7 = ggplot(mydata, aes(logit, predictor.value))+
+  geom_point(size = 0.05, alpha = 0.8) +
+  theme_bw() +
+  labs(y = "Dissimilarity by\nMixing Character",x=NULL) +
+  coord_flip()
+
+combined_plot = grid.arrange(p1,p2,p3,p4,
+                             p5,p6,p7,
+                             left = "Logit of the Song Success",
+                             nrow=2, ncol=4)
+```
+
+
+## Checking k basis
+
+```{r}
+k.check(u7)
+#gam.check(u1)
+```
+
+All k basis are not too low
+
+
+```{r}
+AIC(u1,l1)
+AIC(u2,l2)
+AIC(u3,l3)
+AIC(u4,l4)
+AIC(u5,l5)
+AIC(u6,l6)
+AIC(u7,l7)
+```
+
+Drums_Energy - Similar
+Drums_Complexity - Similar(closer to linear)
+Variety_of_musical_instruments - similar according to AIC (the smooth term will be used)
+Harmonic_Richness - Smooth
+Emotional_Intensity - Smooth
+Mixing_Quality - Linear
+Mixing_Character - Linear
+
+```{r}
+anova.gam(u1,l1, test = "Chisq")
+anova.gam(u2,l2, test = "Chisq")
+anova.gam(u3,l3, test = "Chisq")
+anova.gam(u4,l4, test = "Chisq")
+anova.gam(u5,l5, test = "Chisq")
+anova.gam(u6,l6, test = "Chisq")
+anova.gam(u7,l7, test = "Chisq")
+```
+
+Drums_Energy - Smooth
+Drums_Complexity - Smooth
+Variety_of_musical_instruments - Smooth
+Harmonic_Richness - Smooth (sign)
+Emotional_Intensity - Smooth (sign)
+Mixing_Quality - Smooth
+Mixing_Character - Smooth
+
+
+```{r}
+model_n = u5
+summary(model_n)
+var_name = row.names(as.data.frame(model_n$coefficients[2])) %>%
+              str_sub(start = 3, end = -4) %>%
+              str_replace_all(pattern = "_", " ")
+line_y = as.numeric(model_n$coefficients[1]) %>% plogis()
+
+plot(ggpredict(model_n))[[1]] +
+  labs(title = "Predicted Probabilities of Song Success",
+       x = paste("Dissimiliarity by", var_name),
+       y = "Predicted Probability of Hit") +
+  scale_x_continuous(breaks = seq(0,10,0.25)) +
+  scale_y_continuous(breaks = seq(0,1,0.01))
+
+# -----------------------------------------
+
+datka = ggpredict(u5) %>% as.data.frame()
+
+ggpredict(u5) 
+summary(u5)
+```
+
+Drums_Energy - linear down
+Drums_Complexity - linear down
+Variety_of_musical_instruments - linear down
+Harmonic_Richness - inv u-shaped
+Emotional_Intensity - inv u-shaped
+
+
+```{r}
+gam_full = gam(Song_Success~
+                 Drums_Energy +
+                 s(Drums_Complexity) +
+                 s(Variety_of_musical_instruments) +
+                 s(Harmonic_Richness) +
+                 s(Emotional_Intensity)+
+                 s(Mixing_Quality),
+               data = final_df1,
+               family = binomial,
+               method = "REML",
+               method.args = list(control = list(type =  "huber")))
+
+summary(gam_full)
+#compareGLM(gam_full)
+
+#concurvity(gam_full)
+gam.check(gam_full)
+```
+
+
+
+```{r}
+# Splitting the data
+set.seed(1)
+
+# using 70% of ds as training set and 30% as test set
+sample = sample(c(TRUE, FALSE), nrow(final_df1), replace=TRUE, prob=c(0.7,0.3))
+train  = final_df1[sample, ]
+test   = final_df1[!sample, ]
+
+# GAM
+
+gam_full1 = gam(Song_Success~
+                 s(Drums_Energy) +
+                 s(Drums_Complexity) +
+                 s(Variety_of_musical_instruments) +
+                 s(Harmonic_Richness) +
+                 s(Emotional_Intensity)+
+                 s(Mixing_Quality),
+               data = train,
+               family = binomial,
+               method = "REML",
+               method.args = list(control = list(type =  "huber")))
+
+test_prob = predict(gam_full1, newdata = test, type = "response")
+
+# Creating ROC Curve Plot
+library(pROC)
+test_roc = roc(test$Song_Success ~ test_prob, plot = TRUE, print.auc = TRUE)
+
+print(paste("GLM Area Under Curve:",test_roc$auc))
+```
+
+
