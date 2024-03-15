@@ -1,0 +1,100 @@
+---
+title: "16 Similarity"
+author: "Timur Sharifullin"
+date: "2023-04-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(lubridate)
+library(reshape2)
+library(proxy)
+
+knitr::opts_chunk$set(echo = TRUE)
+final_df = read.csv("final_df1.csv") 
+final_df$X = as.factor(final_df$X)
+final_df$album_release_date = as.Date(final_df$album_release_date)
+row.names(final_df) = NULL
+```
+
+1. *rmsP_median* - the more intense and energetic beat (Rock or Hard Electronic Instrumentals have higher values, classic trap, rnb, voice only audio messages or instrumentals without drums have lower values)
+2. *rmsP_std* - the loudness of the harmonic content changes frequently (hyperpop or parts with changing drum patterns have higher values, pop/dance, voice only audio messages or instrumentals without drums (music with stable drum pattern) have lower values)
+3. *contrast_median* - simple music (mostly positive) with one or two instruments has higher values of contrast_median, while songs with instrumental overload, complex multi-layered instrumental (in terms of the number of instruments, not in terms of the notes played) have lower values
+4. *contrast_std* - the more variability in sound and therefore - more complexity. Songs where many instruments  change each other (very tonally dynamic, do not become a single layer, as in the case of a low contrast_median) have higher values, music with same sounds/instruments all along the whole song typically has lower values 
+5. *tonnetz_median* - A higher median value suggests a more complex harmonic structure with more notes in the tonal system. Conversely, a lower median value suggests a simpler harmonic structure with fewer notes in the tonal system. So, songs with higher tonnetz_median would have more rich sound in terms of notes mixing, while songs with lower tonnetz_median would sound less interesting, but more catchy and simpler due to lack of tonal textures.
+6. *tonnetz_std* - A higher standard deviation indicate that the song has more complex tonal relationships or a greater variety of musical elements. On the other hand, a lower standard deviation may suggest a simpler or more repetitive tonal structure.
+7. *sound_brightness_noisiness* 
+8. *laid_back_groovy_lyrical*
+9. *quiet_and_melodic*
+10. *overall_spectral_Variability*
+
+```{r}
+hits = final_df[final_df$X=="hit",c(6,18:23,27:30)]
+hits_date = hits$album_release_date
+hits = hits %>% select(-album_release_date)
+
+final_df_sim = final_df[,c(18:23,27:30)]
+```
+
+## rmsP_median
+
+```{r}
+for(g in seq(1,10,1)){
+  start_time0 <- Sys.time()
+  final_df_sim[,g] = NA
+  
+  # Loop through each row of final_df_sim
+  for(i in seq_len(nrow(final_df_sim))){
+    start_time <- Sys.time()
+    
+    # Create matrix of current row
+    current_matrix <- matrix(final_df_audio[i,g])
+    # Create a list of song which was released in a period of past year from observed song (if song == 2017 -> year(2017)) 
+    
+    if(year(final_df$album_release_date[i])==2017){
+      days_before_2017 = 365-as.numeric(final_df$album_release_date[i]-as.Date("2017-01-01"))
+      observed_hits = (hits_date-final_df$album_release_date[i]) <= 192
+    }
+    
+    else{
+      observed_hits = (final_df$album_release_date[i]-hits_date) >= 0 & (final_df$album_release_date[i]-hits_date) <= 365
+    }
+
+    # Create matrix of hits in a last year (according to observed song)
+    hits_matrix <- matrix(hits[observed_hits,g])
+    
+    # Calculate distance using proxy package
+    d <- proxy::dist(hits_matrix, current_matrix, method="euclidean")
+    
+    # Get median similarity for g
+    final_df_sim[i,g] <- median(d[d!=0])
+    
+    cat(paste(g,colnames(final_df_sim)[g],"|",
+              "Track №",i+1,"| Loop Time:",
+              round(as.numeric(Sys.time()- start_time),2), "| Total Time:",
+              round(as.numeric(Sys.time()- start_time0),2),"                                         "),
+        "\r")
+  }
+}
+
+```
+
+## Final Table
+
+```{r}
+fin_df = final_df[,-c(18:23,27:30)]
+
+fin_df = cbind(fin_df,final_df_sim)
+
+row.names(fin_df) = NULL
+head(fin_df)
+```
+
+```{r}
+write.csv(fin_df, "fin_df_distance_year.csv",row.names = F)
+```
+
+
