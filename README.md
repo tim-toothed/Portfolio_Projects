@@ -21,6 +21,25 @@ You can find all of the important information about me in my [CV](https://drive.
 | [EFA: What influences love at first sight?](https://github.com/tim-toothed/Portfolio_Projects/tree/b08b076cc87508f48e0e0ff10028139cb69bdf77/R/EFA_Speed_Dating) | R | `Explanatory Factor Analysis`,<br>`Advanced Analysis` | [RPubs](https://rpubs.com/tim_toothed/1123186) |
 | [CA: Student’s<br>Math Scores](https://github.com/tim-toothed/Portfolio_Projects/tree/b08b076cc87508f48e0e0ff10028139cb69bdf77/R/CA-Students_Math_Score) | R | `Correspondence Analysis`,<br> `Short Project`| [RPubps](https://rpubs.com/tim_toothed/1122900) |
 
+## Bachelor Thesis
 
+Separately, I would highlight my research on factors of popularity in Russian Rap. My Thesis topic in Bachelors was **"Sound Сharacteristics or Artist reputation: What Factors Influence the Popularity of a Hip- Hop Track on the Russian-speaking Market?"**.
+
+**What was done?**  
+1. Data Sampling and Data Collection of 12.743 songs through Web- Scraping (Python, Selenium) and Parsing (Python, Spotify API)
+2. Creation of analytical music metrics using PCA and median Euclidian distance between
+observations (R);
+3. Non-linear Logistic Regression analysis through GAM (R)
+
+**NERDY NOTES**
+1. *Actually, 5 years of charts of three streaming services were scraped to get the initial data and then with the help of Spotify API the discographies were downloaded.*   
+2. *So, during the project I also dive deep into the world of Music Information Retrieval, because I wanted to understand, whether the sound is important at all. So, audio features were extracted through actual audio-preview files of the songs with librosa in Python and then I reduced dimensionality through PCA. And only then I generate the distance to make not the sound factors, but sound 'originality' factors.*  
+3. *GAM was used due to the initial hypothesis of inverted u-shape relationship between sound originality/similarity and popularity of the song* 
+
+By going to the appropriate tab in my portfolio you can find a guide to the files that were created during the research process (however it is a little bit messy, especially in the data collection part).
+
+Code files: [Github Folder](https://github.com/tim-toothed/Portfolio_Projects/tree/0dc03b9e207243219547716e6e19ebb9cd4aff41/Thesis)   
+Clean Dataset: [Kaggle](https://www.kaggle.com/datasets/timursharifullindata/russian-rap-2017-2022-dataset)   
+Thesis Full Text: [HSE Website](https://spb.hse.ru/en/ba/soc/students/diplomas/835759635)
 
 
