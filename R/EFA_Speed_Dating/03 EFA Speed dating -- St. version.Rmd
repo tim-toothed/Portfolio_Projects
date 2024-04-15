@@ -1,0 +1,365 @@
+---
+title: "Explanatory Factor Analysis: What influences love at first sight?"
+author: "Timur Sharifullin"
+date: '2022-05-29'
+output: 
+  html_document:
+    theme: cosmo
+    code_folding: show
+    toc: true
+    toc_float: true
+---
+
+Speed Dating dataset (Kaggle) "What influences love at first sight?"
+About the experiment. https://www.kaggle.com/annavictoria/speed-dating-experiment
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, message= F, warning=F)
+
+library(foreign)
+library(car)
+library(lavaan)
+library(GPArotation)
+library(psych)
+library(nFactors)
+library(sjPlot)
+```
+
+```{r}
+dating <-read.csv("03 Speed Dating Data.csv")
+names(dating)
+```
+
+### Choose the variables we think belong to factors.
+```{r}
+dating1<- dating[c("imprace","imprelig", "date", "go_out", "sports", 
+                   "tvsports", "exercise",  "dining" , "museums",  "art",  
+                   "hiking", "gaming",  "clubbing",  
+                   "reading", "tv",  "theater", "movies",  "concerts",   
+                   "music",   "shopping",   "yoga", "exphappy" , "attr1_1",
+                   "sinc1_1",   "intel1_1", "fun1_1",   "amb1_1",   
+                   "shar1_1", "attr2_1", "sinc2_1",   "intel2_1",   
+                   "fun2_1",   "amb2_1",   "shar2_1",   "attr3_1",   "sinc3_1",
+                   "intel3_1",   "fun3_1",   "amb3_1")]
+dating1 <- as.data.frame(dating1)
+dim(dating1)                
+summary(dating1)
+```
+
+Are there latent factors which explain correlations of the observed variables?
+
+## Part 1
+
+### How many factors should be extracted?
+```{r}
+# fa does not work with NA
+dating12 <- na.omit(dating1)
+library(psych)
+# How many factors should be extracted?
+fa.parallel(dating12, fa="both", n.iter=100) 
+
+ev <- eigen(cor(dating12)) # get eigenvalues
+ev$values # should be above 1
+nS <- nScree(x=ev$values) # get data for scree plot
+plotnScree(nS) # most tests say we should extract 3 factors
+```
+
+### Rotation 1 
+Let's try to use the maximum number of factors.
+
+#### [1] No rotation
+```{r}
+fa(dating12, nfactors=15, rotate="none", fm="ml") 
+```
+
+Too many factors. It is extremely difficult to interpret such a result.
+
+Let's try to reduce the number of factors.
+
+#### [2] No rotation
+```{r}
+fa(dating12, nfactors=5, rotate="none", fm="ml") 
+factor.plot(fa(dating12, nfactors=5, rotate="none", fm="ml"))
+fa.diagram(fa(dating12, nfactors=5, rotate="none", fm="ml"))
+```
+
+Low Cumulative Var = 0.29.
+We have RMSR = 0.07. (should be closer to 0) 
+RMSEA index =  0.133 (<.08 acceptable, <.05 excellent)
+Tucker Lewis Index= 0.215 (>.90 acceptable, >.95 excellent)
+The sad result of fa.
+
+Try to use a rotation. Compare the results.
+
+#### [3] rotation varimax
+
+```{r}
+fa(dating12, nfactors=5, rotate="varimax", fm="ml") 
+factor.plot(fa(dating12, nfactors=5, rotate="varimax", fm="ml"))
+fa.diagram(fa(dating12, nfactors=5, rotate="varimax", fm="ml"))
+```
+The same result, so the factors are related. Try another rotation - oblique (oblimin)
+
+#### [4] rotation oblimin
+
+```{r}
+fa(dating12, nfactors=5, rotate="oblimin", fm="ml") 
+factor.plot(fa(dating12, nfactors=5, rotate="oblimin", fm="ml"))
+fa.diagram(fa(dating12, nfactors=5, rotate="oblimin", fm="ml"))
+```
+
+The result is the same, so we need to exclude variables to improve the EFA
+
+
+## Part 2. Improving The Model
+ 
+### Exluding the variables 1.
+
+Communality is the sum of squared factor loadings for the variables, so to exclude variables we are looking at this parameter (if variable do not belong to either of the factors, this factor should not be presented). Factor loadings have to be 0.4 or more to be acceptable. That means that a threshold for communality of the variable should be 0.16
+
+```{r}
+oblfa = fa(dating12, nfactors=5, rotate="oblimin", fm="ml") 
+oblfa
+com = data.frame(oblfa$communality)
+library(dplyr)
+arrange(com, oblfa.communality)
+
+```
+As it can be seen, many of the variables has really low communality, the acceptable level is 0.16, so filter all that lower it
+
+```{r}
+com1 = com %>% filter(oblfa.communality<=0.16)
+varlist = com1 %>%select(-oblfa.communality)
+varlist
+```
+
+So, we receive 16 variables out of 39 that should be removed. Now we remove inappropriate variables from a dataset.
+
+```{r}
+dating22 = select(dating12, 
+                                -imprace, 
+                                -imprelig, 
+                                -date, 
+                                -go_out,
+                                -tvsports,
+                                -exercise,
+                                -hiking,
+                                -gaming,
+                                -clubbing,
+                                -reading,
+                                -music,
+                                -yoga,
+                                -exphappy,
+                                -sinc1_1,
+                                -intel1_1,
+                                -fun1_1,
+                                -sinc3_1,
+                                -intel3_1)
+```
+
+
+### New number of factors
+
+```{r}
+fa.parallel(dating22, fa="both", n.iter=100) 
+
+ev <- eigen(cor(dating22)) 
+ev$values 
+```
+Now, the maximum number of factors is 7.  Another option is 3. 
+
+### Factor Analysis
+
+Again, we try to use the maximum number of factors.
+
+#### (1) No rotation, 7 factors
+```{r}
+fa1=fa(dating22, nfactors=7, rotate="none", fm="ml")
+fa1
+```
+Higher Cumulative Var = 0.51
+We have RMSR = 0.07 - the same - should be closer 0 
+Almost the same RMSEA index =  0.134 (<.08 acceptable, <.05 excellent)
+Tucker Lewis Index= 0.613 (>.90 acceptable, >.95 excellent)
+The result is better but still not good.
+
+#### (2) No rotation, 3 factors
+Now we will use 3 factors.
+
+```{r}
+fa2=fa(dating22, nfactors=3, rotate="none", fm="ml")
+fa2
+```
+Lower Cumulative Var = 0.31
+Worse RMSR = 0.11 (should be closer to 0) 
+Worse RMSEA index =  0.186 (<.08 acceptable, <.05 excellent)
+Tucker Lewis Index= 0.249 (>.90 acceptable, >.95 excellent)
+The result is worse, *BUT* we need to look closer at the factor loadings
+
+Factor Loadings of (1)
+```{r}
+print(fa1$loadings,cutoff = 0.4)
+```
+Factor Loadings of (2)
+```{r}
+print(fa2$loadings,cutoff = 0.4)
+```
+Firstly, both of them have variables that do not belong to neither of factors. Secondly, in the (1) there are factors to which only one variable belongs (ML5,ML2,ML4) and factors which by SS loadings should not be here (ML3,ML4), this is bad result. In the case (2) the situation with factors is better, but the cumulative variance is lower. So, it is very controversial what to change now.
+
+At first, we will continue working on removing the variables.
+
+### Exluding the variables 2. 
+
+```{r}
+dating32 = select(dating22, -shopping,
+                  -dining,
+                  -movies,
+                  -attr1_1,
+                  -amb1_1,
+                  -shar1_1,
+                  -attr3_1,
+                  -fun3_1,
+                  -amb3_1)
+```
+
+### Comparison with different number of factors
+
+Now we have more or less consistent set of variables, but the appropriate number of factors is still unknown. We will try different number of factors (from 3 to 7) with different rotation
+
+```{r}
+fac1=fa(dating32, nfactors=3, rotate="none", fm="ml")
+fac1o=fa(dating32, nfactors=3, rotate="oblimin", fm="ml")
+fac1v=fa(dating32, nfactors=3, rotate="varimax", fm="ml")
+
+fac2=fa(dating32, nfactors=4, rotate="none", fm="ml")
+fac2o=fa(dating32, nfactors=4, rotate="oblimin", fm="ml")
+fac2v=fa(dating32, nfactors=4, rotate="varimax", fm="ml")
+
+fac3=fa(dating32, nfactors=5, rotate="none", fm="ml")
+fac3o=fa(dating32, nfactors=5, rotate="oblimin", fm="ml")
+fac3v=fa(dating32, nfactors=5, rotate="varimax", fm="ml")
+
+fac4=fa(dating32, nfactors=6, rotate="none", fm="ml")
+fac4o=fa(dating32, nfactors=6, rotate="oblimin", fm="ml")
+fac4v=fa(dating32, nfactors=6, rotate="varimax", fm="ml")
+
+fac5=fa(dating32, nfactors=7, rotate="none", fm="ml")
+fac5o=fa(dating32, nfactors=7, rotate="oblimin", fm="ml")
+fac5v=fa(dating32, nfactors=7, rotate="varimax", fm="ml")
+
+```
+
+Comparison of main characteristics by number of factors
+Of course we cannot fully rely only on RMSEA, TLI and Cumulative Variance to tell how good is our factor analysis, but for now we try to meet the criteria as much as possible: 
+RMSEA (<.08 acceptable, <.05 excellent)
+TLI (>.90 acceptable, >.95 excellent)
+
+```{r}
+rmsea1 = fac1$RMSEA
+rmsea2 = fac2$RMSEA 
+rmsea3 = fac3$RMSEA
+rmsea4 = fac4$RMSEA
+rmsea5 = fac5$RMSEA 
+
+RMSEA = c(rmsea1[1], rmsea2[1], rmsea3[1], rmsea4[1], rmsea5[1])
+
+TLI = c(fac1$TLI, fac2$TLI, fac3$TLI, fac4$TLI, fac5$TLI)
+
+cumvar1 = fac1$Vaccounted
+cumvar1 = cumvar1[3,3]
+cumvar2 = fac2$Vaccounted
+cumvar2 = cumvar2[3,4]
+cumvar3 = fac3$Vaccounted
+cumvar3 = cumvar3[3,5]
+cumvar4 = fac4$Vaccounted
+cumvar4 = cumvar4[3,6]
+cumvar5 = fac5$Vaccounted
+cumvar5 = cumvar5[3,7]
+
+Cumulative_Var = c(cumvar1, cumvar2, cumvar3, cumvar4, cumvar5)
+
+name = c("FA1 (3 factors)", 
+         "FA2 (4 factors)", 
+         "FA3 (5 factors)", 
+         "FA4 (6 factors)", 
+         "FA5 (7 factors)")
+
+fa_comparison = data.frame(name,Cumulative_Var, TLI, RMSEA) 
+fa_comparison
+```
+So, our choice is obviously FA5 with 7 factors. Choosing the rotation
+
+### Rotation 2
+
+#### No rotation
+```{r}
+print(fac5$loadings,cutoff = 0.4) 
+fa.diagram(fac5)
+```
+#### Oblimin Rotation
+```{r}
+print(fac5o$loadings,cutoff = 0.4)
+fa.diagram(fac5o)
+```
+#### Varimax Rotation
+```{r}
+print(fac5v$loadings,cutoff = 0.4)
+fa.diagram(fac5v)
+```
+
+#### Conclusion
+In Oblimin rotation, as well as in the Varimax rotation every latent factor describe something, but there is a big problem: most of the latent factors describe only one variable - so factors are not latent, they just describe the variable, it is not really explanatory. The no rotation option seems to be the best, however it has a problem there are some factors that do not describes anything, and there are some variables that do not belong to any factor. We need to fix it  
+
+
+### Final fix
+
+In the final version it has been decided to stay with only 2 factors and 6 variables. It is not much, but it is the most precise option 
+```{r}
+fac5o_upgrade=fa(dating32[,-c(4,6,10,11,12,1)], nfactors=2, rotate="none", fm="ml")
+fa.diagram(fac5o_upgrade)
+fac5o_upgrade
+```
+Final results:
+RMSR = 0.04 (closer to 0, improved!)
+RMSEA = 0.121 (improved, but still not good)
+TCI = 0.916 (good, improved!)
+Cumulative Variance = 0.63 (improved!)
+
+Also, we can see almost perfect complexity (min. 1.000118, max. 1.089190)
+## Part 3. Description of factors
+
+### Variables. 
+
+How interested are you in the following activities, on a scale of 1-10? 
+1. Art - art
+2. Museum - museum
+3. Theater -theater
+(related to ML2)
+All of the relations are positive
+
+
+What do you think the opposite sex looks for in a date? 
+
+4. Attractive - attr2_1 (positive relation)
+5. Sincere - sinc2_1 (negative relation)
+6. Intelligent - intel2_1 (negative relation)
+(related to ML1)
+
+### Factor names and description
+
+#### ML1 - "Sexual desirability"
+
+People look for different things in partners, different personality traits can attract a person. However, it is worth taking into account what kind of relationship a person wants: long-term for building a family, living together, or short-term to satisfy sexual needs.Since the goals during the search for a partner are different, the focus of attention will be aimed at different qualities of a person.
+
+The authors (Pamela C. Regan, Lauren Levin,Susan Sprecher,F. Scott Christopher & Rodney Gate) of the research "What Characteristics Do Men and Women Desire In Their Short-Term Sexual and Long-Term Romantic Partners?" (2008) has such a results on this topic: "both men and women focused upon sexual desirability (e.g., attractiveness, health, sex drive, athleticism) when evaluating a short-term sexual partner, and placed more importance on similarity and on socially appealing personality characteristics (e.g., intelligence, honesty, warmth) when considering a long-term romantic relationship." 
+
+So, as I think, the factor can be interpreted as Sexual desirability (or Sexuality) factor
+
+
+#### ML2 - "Highbrowness"
+
+ML2 describes the activities, which are strictly related to highbrow culture. In comparison with music or movies which can be highbrow, lowbrow or middlebrow, activities that this factor have a relation with is usually treated as highbrow. So, If a person says that he is fond of theater, art, or likes to go to museums, this signals that the person is fond of highbrow culture. 
+
+The terms of high- and lowbrow culture is one of the key concepts in the of Bourdie's "The Difference: Social Criticism of the Judgment of Taste" (1979). "Taste has as much to do with expressed distaste for the aesthetic preferences attributed to other social groups as with positive adherence to the preferences of one’s own social group” and that is why such a distinction between cultural activites exists. 
+
+I would like to name the factor "Highbrowness". 
