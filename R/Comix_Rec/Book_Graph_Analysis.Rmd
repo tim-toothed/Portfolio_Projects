@@ -1,0 +1,279 @@
+---
+title: "Network analysis: Book Recommendations"
+author: "Sharifullin Timur"
+date: "2021-04-20"
+output: 
+  html_document:
+    theme: cosmo
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE, error=FALSE, warning=F}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 9999)
+
+library(readr)
+library(stringr)
+library(dplyr)
+library(igraph)
+library(ggraph)
+library(igraphdata)
+library(ggplot2)
+library(tidygraph)
+library(tidyr)
+library(tidytext)
+library(stats)
+library(visNetwork)
+library(rpart)
+library(rpart.plot)
+library(ggforce)
+library(plotly)
+
+# Network in GraphML format
+comics_net = read_graph("book_net.hml", 
+                        format = "graphml")
+
+# Information about books (the books_net_info dataframe will appear)
+load("books_net_info.RData")
+
+# Just a copy
+books_net_info_copy = books_net_info
+```
+
+
+## Is the similarity of user ratings of books (comics) related to specific publishers?
+
+```{r warning=F}
+books_net_info_check = books_net_info %>%
+  group_by(publisher) %>%
+  summarize(number_of_published_books=n()) %>%
+  arrange(desc(number_of_published_books))
+
+books_net_info_check
+```
+
+As you can see many publishers repeat themselves - TokyoPop and Tokyopop, Marvel; Marvel Comics and Marvel Comics Group. Of course, there are also different divisions, such as "BOOM! Studios" and "BOOM! Box" that don't need to be merged because of the different comic book specifics, but all those that clearly represent the same publisher are worth merging. Also, we'll remove those comics whose publisher is not listed and leave only those publishers with >=10 books published (the correlation of user ratings with publishers with fewer books published is not representative due to too few items to compare).
+
+```{r warning=F}
+# delete those comics with no publisher listed
+books_net_info_1 = books_net_info %>% filter(books_net_info$publisher!="")
+
+# Let's make a publisher adjustment - merge the copies
+books_net_info_1$publisher1 = case_when(
+  books_net_info_1$publisher %in% c("Action Lab", "Action Lab Entertainment", "Action Lab Entertainment Inc") ~ "Action Lab",
+  books_net_info_1$publisher %in% c("Drawn & Quarterly","Drawn and Quarterly") ~ "Drawn & Quarterly",
+  books_net_info_1$publisher %in% c("Marvel","Marvel Comics", "Marvel Comics Group", "Marvel Enterprises, Inc.") ~ "Marvel", 
+  books_net_info_1$publisher %in% c("Tokyopop","TokyoPop Inc","TokyoPop") ~ "TokyoPop", 
+  books_net_info_1$publisher %in% c("Vertigo","Vertigo (DC Comics)","Vertigo Comics") ~ "Vertigo",
+  books_net_info_1$publisher %in% c("VIZ Media","VIZ Media LLC","VIZ Media, LLC") ~ "VIZ Media",
+  books_net_info_1$publisher %in% c("Wildstorm", "WildStorm","Wildstorm Signature") ~ "Wildstorm",
+  T~books_net_info_1$publisher)
+
+# Let's find out which of the resulting publishers have the number of published books >=10
+books_net_info_check_1 = books_net_info_1 %>% 
+  group_by(publisher1) %>% 
+  summarize(number_of_published_books=n()) %>% 
+  filter(number_of_published_books>=10) %>% 
+  arrange(desc(number_of_published_books))
+
+# Let's leave only those publishers with the number of books published >=10
+books_net_info_11 = books_net_info_1 %>% filter(books_net_info_1$publisher %in% c("Marvel","DC Comics","Vertigo", "Image Comics", "VIZ Media", "Dark Horse Books","First Second", "Wildstorm","Dark Horse","Yen Press"))
+
+# Remove unnecessary vertices from the graph and add attributes
+books_net_info$publisher2 = case_when(
+  books_net_info$publisher=="Marvel" ~ "Marvel",
+  books_net_info$publisher=="DC Comics"~"DC Comics",
+  books_net_info$publisher=="Vertigo"~"Vertigo", 
+  books_net_info$publisher=="Image Comics"~"Image Comics", 
+  books_net_info$publisher=="VIZ Media"~"VIZ Media", 
+  books_net_info$publisher=="Dark Horse Books"~"Dark Horse Books",
+  books_net_info$publisher=="First Second"~"First Second", 
+  books_net_info$publisher=="Wildstorm"~"Wildstorm",
+  books_net_info$publisher=="Dark Horse"~"Dark Horse",
+  books_net_info$publisher=="Yen Press"~"Yen Press", 
+  T~"Other")
+
+comics_publisher = comics_net
+
+V(comics_publisher)$publisher = books_net_info$publisher2
+comics_publisher1 = delete.vertices(comics_publisher, V(comics_publisher)$publisher=="Other")
+V(comics_publisher)$book_id = books_net_info$book_id
+```
+
+
+Next, in order to visualize how similar the points are, we will use the centrality measure degree.
+
+The centrality measure degree is equal to the number of links a node has. In a given graph, the comics that have the highest degree value will be similar to the largest number of other comics, and vice versa, if the degree value is the smallest, then the comic is similar to the smallest number of comics in the network. This measure of centrality in this case will help us see if there are extremely similar grades that certain publishers are given more often. 
+
+```{r}
+books_net_info_11 %>% 
+  transmute(degree=degree(comics_publisher1),publisher,title) %>% 
+  arrange(desc(degree))
+```
+
+
+### Visualization
+
+Let's build a graph using the ggraph library, where the node size will be determined by the node degree value, and its color will depend on the publisher.
+
+```{r fig.width = 10, fig.height=8}
+p1 <- ggraph(comics_publisher1, layout="kk") +
+  geom_node_point(aes(size=degree(comics_publisher1),color=V(comics_publisher1)$publisher)) +
+  geom_edge_arc(aes(),alpha=0.03) +
+  scale_color_discrete(name="Publisher") +
+  theme_void()
+```
+
+Let's look at the node layers by publisher through an interactive graph for better understanding. Double click on the publisher name - leaves only comics of this particular publisher, one click on the name - removes the layer of this particular publisher. 
+
+```{r error=F, warning=F}
+ggplotly(p1)
+```
+
+In both graphs, at first glance, no patterns between publisher and user ratings are found. Let's use the assortativity measure to find out if there is actually a relationship between similarity of ratings and publisher.
+
+
+```{r}
+V(comics_publisher1)$publisher<-as.factor(V(comics_publisher1)$publisher)
+assortativity_nominal(comics_publisher1, V(comics_publisher1)$publisher, directed = F)
+```
+
+### Conclusion
+
+Assortativity is close to zero, there is no relationship between publisher and user rating 
+
+It is impossible to identify a certain publisher-leader by user evaluations in the graph. All publishers (who have at least 10 published books) have both successful and unsuccessful book evaluations by the user.
+
+## What recommendations can be built based on the similarity of user ratings for readers of marvel comics?
+
+Since it would not be entirely relevant to build recommendations for an entire dataset of 777 books based on a community breakdown, I decided to choose one subgroup - a specific category of books.
+
+Let's examine the available data on "what other 'shelf', category this book is often assigned to" (popular_shelves.3.name), which is where the "marvel" category is found.
+
+```{r}
+books_net_info_check2 = books_net_info_copy %>% group_by(popular_shelves.3.name) %>% summarize(number_of_books_per_category=n()) %>% arrange(desc(number_of_books_per_category)) %>% rename("Category" = popular_shelves.3.name,"N_books" =number_of_books_per_category)
+books_net_info_check2 
+```
+
+There are 52 books in the "marvel" category - a sufficient number to analyze. 
+
+```{r}
+# initial graph
+comics_marvel = comics_net
+
+# Filtering data in the dataset by "marvel" category
+books_net_info_2 = books_net_info_copy %>% filter(popular_shelves.3.name=="marvel")
+
+# Remove unnecessary vertices from the graph
+V(comics_marvel)$category = books_net_info_copy$popular_shelves.3.name
+comics_marvel1 =delete.vertices(comics_marvel, V(comics_marvel)$category != "marvel")
+
+# Add ID
+V(comics_marvel1)$book_id = books_net_info_2$book_id
+```
+
+
+### Betweenness
+
+In order to reliably answer the recommendation question, we need to use the betweenness centrality measure.
+
+The betweenness centrality measure denotes how many shortest paths pass through a point. In this case, where the links between nodes are "similarity of book scores", the highest value of betweenness will indicate the most average score **between two unrelated or poorly related groups** of books, and the lowest values will have the most extraordinary scores. Let's say if we have a group of books with scores between 3 and 3.2, and we also have another group with scores between 3.6 and 3.8, the book with a score of 3.4 will have the highest betweenness among these nodes (if it has a connection to both groups). The larger the groups and the smaller (up to 1) such bridge nodes are, the more betweenness a node acting as a bridge has. 
+
+Thus, nodes with a large value of betweenness will signal that this comic can be recommended to more than one group, and nodes with a small value - on the contrary, that this comic can be recommended to no more than one group.
+
+```{r,error=F, warning=F}
+marvel_betw = books_net_info_2 %>% 
+  transmute(book_id,
+            betw = betweenness(comics_marvel1)) %>% 
+  arrange(desc(betw)) %>% rename("Book ID" = book_id, "Betwenness"=betw)
+
+head(marvel_betw)
+```
+
+
+```{r fig.width=10, fig.height=10}
+plot(comics_marvel1,
+     vertex.size=0.2*betweenness(comics_marvel1),
+     vertex.label = V(comics_marvel1)$book_id,
+     vertex.label.cex = 0.8)
+```
+
+Only 9 comics out of 52 have a betweenness value not equal to zero. This means that the graph is extremely heterogeneous.
+
+
+### Closeness
+
+Also, we can use the closeness centrality measure. The closeness centrality measure indicates which nodes are closest to other nodes. In other words, the number of steps it takes to get from one node to another will play the biggest role here. Closeness in this case will depend on which estimates were the most common. The most common estimates in the entire network have the highest closeness - since the more points that are the fastest to get to from a given point - the greater the closeness. The fewest estimates have the smallest closeness - from them the path to the largest number of estimates will be the largest. 
+
+Accordingly, the more closeness, the more books can be recommended, the less closeness - the narrower the circle of possible recommendations.
+
+```{r}
+options(scipen = 9999)
+marvel_betw_clo = books_net_info_2 %>% 
+  transmute(book_id,
+            closeness = closeness(comics_marvel1,normalized = TRUE),
+            betw = betweenness(comics_marvel1)
+            ) %>% 
+  arrange(desc(closeness)) %>% rename("Book ID" = book_id, "Betwenness"=betw)
+head(marvel_betw_clo,15)
+```
+
+19/52 vertices are isolated - that is why a lot of books do not have closeness. 
+
+
+```{r fig.width=10,fig.height=10,error=F, warning=F}
+
+vertex_size = 10*closeness(comics_marvel1, normalized = T)
+vertex_size[is.na(vertex_size)] = 0
+
+plot(comics_marvel1,
+     vertex.size= vertex_size,
+     vertex.label = V(comics_marvel1)$book_id,
+     vertex.label.cex = 0.8)
+```
+
+
+There are some groups of nodes with high closeness, most of the nodes lies in a rather narrow range of values: from 0.2435897	to 0.3877551 - which indicates that the nodes do not lie too close to each other. 
+
+### Communities
+
+Partitioning the graph into communities will make it easy to determine which to recommend: which books can be recommended in case a person liked book A - books from the community in which book A lies. In order to choose which partitioning method to use let's look at the modularity of different methods of partitioning this graph.
+
+Walktrap modularity
+
+```{r}
+wt <- walktrap.community(comics_marvel1)
+modularity(wt)
+```
+
+Fast Greedy modularity
+```{r}
+fg <- fastgreedy.community(comics_marvel1)
+modularity(fg)
+```
+
+Edge Betweenness modularity 
+```{r}
+eb = edge.betweenness.community(comics_marvel1)
+modularity(eb)
+```
+
+Modularity is equally high in all methods, and hence we use Walktrap.
+
+```{r fig.width=15,fig.height=15}
+set.seed(12346)
+plot(fg, comics_marvel1,
+     vertex.label = books_net_info_2$title_without_series,
+     vertex.label.cex = 0.9,
+     vertex.color = membership(wt),
+     vertex.size=0.2*betweenness(comics_marvel1),
+     edge.width=0.0001)
+```
+
+### Conclusion 
+
+Using the Walktrap partitioning method, 27 communities were formed, of which only 8 communities are a group of multiple node links, the remaining 19 communities consist of a single node, and therefore cannot be recommended based on the criterion of similarity of user rating, regardless of what other book from this graph a person would like. Only 3 books ("The Invincible Iron Man, Volume 1: The Five Nightmares", "Storm, Vol. 1: Make it Rain," "Hawkeye, Volume 5: All-New Hawkeye") can be recommended in more than one community based on similarity of user ratings. The other recommendation relationships are indicated in the box above.
+
+The criterion of similarity of user ratings for comics from the "marvel" category is not very good for selecting recommendations. There are too few links between nodes in the graph (in other words, user ratings vary too much).
