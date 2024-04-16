@@ -4,6 +4,8 @@ Complex sociological Explaratory Factor Analysis on speed dating dataset.
 
 ## Results 
 
+![image](https://github.com/tim-toothed/Portfolio_Projects/assets/148921597/dda85068-2ef1-4193-a46d-87b3111684d4)
+
 **ML1 - “Sexual desirability”**
 People look for different things in partners, different personality traits can attract a person. However, it is worth taking into account what kind of relationship a person wants: long-term for building a family, living together, or short-term to satisfy sexual needs.Since the goals during the search for a partner are different, the focus of attention will be aimed at different qualities of a person.
 
@@ -16,7 +18,7 @@ ML2 describes the activities, which are strictly related to highbrow culture. In
 
 The terms of high- and lowbrow culture is one of the key concepts in the of Bourdie’s “The Difference: Social Criticism of the Judgment of Taste” (1979). “Taste has as much to do with expressed distaste for the aesthetic preferences attributed to other social groups as with positive adherence to the preferences of one’s own social group” and that is why such a distinction between cultural activites exists.
 
+I would like to name the factor “Highbrowness”.
+
 ## Background
 Study project... Again...
-
-I would like to name the factor “Highbrowness”.
