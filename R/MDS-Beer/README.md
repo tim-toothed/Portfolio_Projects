@@ -1,4 +1,6 @@
 # How to choose Beer with MDS
+***View in my [RPubs](https://rpubs.com/tim_toothed/1122909) page***
+
 ## tldr
 I was having fun by deep diving into ggplot2 plots, multi-dimensional scaling and enormous dataset on beer.
 
