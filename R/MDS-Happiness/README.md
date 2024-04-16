@@ -1,5 +1,5 @@
 # MDS: World Happiness Report
-***View in my [RPubs](https://rpubs.com/tim_toothed/1122909) page***
+***View in my [RPubs](https://rpubs.com/tim_toothed/mds_happiness) page***
 
 ## tldr
 Moderately complex, moderately short show-off project on Multi-Dimensional Scaling in R.
