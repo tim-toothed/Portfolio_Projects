@@ -1,4 +1,6 @@
 # EFA: What influences love at first sight?
+***View in my [RPubs](https://rpubs.com/tim_toothed/1123186) page***
+
 ## tldr
 Complex sociological Explaratory Factor Analysis on speed dating dataset. 
 
