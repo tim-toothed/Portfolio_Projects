@@ -1,4 +1,6 @@
 # Network analysis: Comix Recommendations
+***View in my [RPubs](https://rpubs.com/tim_toothed/1122885) page***
+
 ## tldr
 Small project to show that I can build graph networks and analyze them.
 
