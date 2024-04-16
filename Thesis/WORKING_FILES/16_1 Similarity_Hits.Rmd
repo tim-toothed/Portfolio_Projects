@@ -39,7 +39,7 @@ hits = hits %>% select(-album_release_date)
 final_df_sim = final_df[,c(18:23,27:30)]
 ```
 
-## rmsP_median
+## FUNCTION `AUDIO FEATURES TO ORIGINALITY`
 
 ```{r}
 for(g in seq(1,10,1)){
