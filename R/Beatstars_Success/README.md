@@ -1,4 +1,7 @@
 # Analysis of Top Selling Beats on Beatstars
+
+***View in my [RPubs](https://rpubs.com/tim_toothed/1121360) page***
+
 ### tldr
 
 1. Web-scraped the stats from the beatmaker market website with Selenium -> 2 dataset with beats (372 obs.) and producers (202 obs.)
