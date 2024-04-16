@@ -1,4 +1,6 @@
 # AI-Transcription for Interview
+***[Open in Colab](https://colab.research.google.com/drive/1crLzZJYKfN39SdnNhH4OWAP53NDRgDYH?usp=sharing)***
+
 ## tldr
 Additional diorization module for OpenAI Whisper to transform audio-to-text taking into account the division of speech by speakers. Transform 1 hour of interview in 3 minutes. (Tuned for Russian language)
 
