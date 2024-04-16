@@ -1,0 +1,223 @@
+---
+title: "11 SOMETHING I DONT KNOW"
+author: "Timur Sharifullin"
+date: "2023-03-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(stringr)
+library(lubridate)
+```
+
+```{r}
+artists_full_table = read.csv("FINAL CSVs//unique_artists.csv")
+artists_full_table = artists_full_table[-c(273,241,269),]
+
+ds = read.csv("maybe_final11.csv")
+ds[3830,14] = "3KFMZiONybSg0tJIWS4tee"
+
+ds_all = read.csv("temporal_audio2017.csv") %>% select(track_id,artists_all) %>% unique()
+```
+
+
+## All Artists on track
+```{r}
+ds$artists_all = NA
+i=1
+for(i in seq(1,nrow(ds))){
+  ds$artists_all[i] = ds_all[which(ds_all$track_id==ds$track_id[i])[1],2]
+}
+ds$artists_all[10279] = ds$artist_name[10279]
+ds$artists_all[14519] = ds$artist_name[14519]
+```
+
+## Remake OR Not
+```{r}
+ds$remake = NA
+
+#i=14640
+for(i in seq(1,nrow(ds))){
+  if(str_detect(str_to_lower(ds$track_name[i]),"live")==T ){
+    ds$remake[i] = "live"
+  }
+  if(str_detect(str_to_lower(ds$track_name[i]),"mix|remix|RMX")==T){
+    ds$remake[i] = "remix"
+  }
+  if(str_detect(str_to_lower(ds$track_name[i]),"acoustic")==T | str_detect(str_to_lower(ds$album_name[i]),"acoustic")==T){
+    ds$remake[i] = "acoustic"
+  }
+  if(is.na(ds$remake[i])==T){
+    ds$remake[i] = "original"
+  }
+}
+
+summary(as.factor(ds$remake))
+```
+
+```{r}
+ds_result = as.data.frame(ds[1,])
+ds_result[1,] = NA
+```
+
+
+## Duplicates by artist
+
+```{r}
+for(i in seq(1,nrow(ds),1)){
+  
+  # check how many artists on the same track are 
+  artists = unlist(str_split(ds$artists_all[i],"; "))
+  
+  ## if there is more than one artist
+  if(length(artists) > 1){
+    
+    # loop through all the artists on the track
+    for(n in seq(1,length(artists))){
+      cat(paste(i,n),"\r")
+      
+      #check which artists exists in the sample 
+      if(artists[n] %in% ds$artist_name){
+        
+        # create separate row 
+        artist_row = ds[i,]
+        
+        # change name and id of the artist for that row
+        artist_row[1,1] = artists[n]
+        artist_row[1,12] = ds_artists[
+          which(trimws(str_to_lower(artists_full_table[,1])) == trimws(str_to_lower(artists[n]))),2]
+        
+        # add a row to a new table
+        ds_result = rbind(ds_result, artist_row)
+      }
+    }
+  }
+  
+  ## if there is only one artist
+  else{
+    
+    # add a row to a new table
+    ds_result = rbind(ds_result, ds[i,])
+  }
+  
+}
+
+ds_result = ds_result[-1,]
+row.names(ds_result) = NULL
+ds_result = arrange(ds_result,artist_name,album_release_date)
+```
+
+```{r}
+write.csv(ds_result, "FINALLY.csv")
+```
+
+```{r}
+# group by artist and arrange by release date
+df <- ds %>%
+  arrange(artist_name, album_release_date)
+df
+
+for(i in seq(1,nrow(df))){
+  list_of_artists = sort(unique(df$artist_name))
+  for(a in seq(1,length(list_of_artists))){
+    while(df$artist_name[i] == a){
+      if(df$X[i] == "hit")
+    }
+  }
+  
+}
+```
+```{r}
+Sys.setenv(SPOTIFY_CLIENT_ID = 'f16e4d0a6bc647e2b4a9ab2a4acc9fcb')
+Sys.setenv(SPOTIFY_CLIENT_SECRET = '7ec28b37c9754ea5b824ff73cd78b6b5')
+
+access_token <- get_spotify_access_token()
+options(warn = 2)         
+```
+
+
+```{r}
+ds = read.csv("FINALLY.csv")
+ds = ds[,-1]
+
+#ds_download = data.frame(un_id  = unique(ds$track_id),
+#                         download_link = NA)
+
+#ds_download = read.csv("ds_donwload_links.csv")
+# Loop  - 200 tracks per loop
+for(g in seq(11723, 13897, 150)){
+  
+  # Loop - get track's link
+  for(i in seq(1+g, 150+g, 1)){
+    
+    cat(paste(i, "|", 13897, "\r"))
+    
+    link = get_track(id = ds_download$un_id[i])$preview_url
+    
+    # If there is a link, bring it to the ds_download
+    if(is.null(link) != T){
+      ds_download$download_link[i] = link
+    }
+  }
+  
+  # Sleep for 60 seconds
+  Sys.sleep(60)
+  write.csv(ds_download,"ds_donwload_links.csv",row.names=FALSE)
+}
+```
+
+```{r}
+colnames(ds_download)[1] = "track_id"
+
+ds_tipo = left_join(ds_download, ds, by = "track_id")
+```
+
+
+
+```{r}
+for(g in seq(0,1097,100)){
+  
+  for(i in seq(1+g, 100+g, 1)){
+    
+    cat(paste(i, "|", 1097, "\r"))
+    
+    search_query = paste(ds_tipo_na[i,3], ds_tipo_na[i,4], sep = " ")
+    track_search = search_spotify(q = search_query,
+                                  limit = 1, 
+                                  type = "track",
+                                  authorization = get_spotify_access_token(), 
+                                  include_meta_info = F)$preview_url
+    
+    if(is.null(track_search) != T){
+      ds_tipo_na$download_link[i] = track_search
+    }
+  }
+  
+  Sys.sleep(60)
+  write.csv(ds_tipo_na,"ds_donwload_links_na.csv",row.names=FALSE)
+  
+}
+```
+
+```{r}
+ds_tipo_ne_na = ds_tipo[!is.na(ds_tipo$download_link),]
+
+ds_tipo1  = rbind(ds_tipo_ne_na, ds_tipo_na)
+anyNA((is.na(ds_tipo1$download_link)))
+```
+
+```{r}
+write.csv(ds_tipo1,"ds_fin_donwload_links.csv",row.names=FALSE)
+```
+
+```{r}
+ds_tipo1 = read.csv("ds_fin_donwload_links.csv")
+```
+
+```{r}
+ds_tipo1[!duplicated(ds_tipo1$download_link),]
+```
+
+

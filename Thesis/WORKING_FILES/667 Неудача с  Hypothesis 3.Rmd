@@ -1,0 +1,265 @@
+---
+title: "22 Hypothesis 3"
+author: "Timur Sharifullin"
+date: "2023-04-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(stringr)
+library(dplyr)
+final_df = read.csv("fin_df_distance_year.csv")
+final_df$X = factor(final_df$X, levels = c("none","hit"))
+final_df$artist_name = as.factor(final_df$artist_name) 
+final_df1 = final_df[,c(1,3,5,6,16,18)]
+final_df1
+```
+
+
+```{r}
+final_df1$is_feat = str_detect(final_df1$artists_all,";")
+final_df1$n_feat = str_count(final_df1$artists_all,";")
+final_df1$statuses = NA
+final_df1$min_status = NA
+final_df1$max_status = NA
+
+for(i in seq(1,nrow(final_df1),1)){
+  if(final_df1$is_feat[i] == T){
+    
+    final_df1$statuses[i] = paste(final_df1[final_df1$track_id == final_df1$track_id[i],]$hit_n,collapse = ";")
+  }
+  else{
+    final_df1$statuses[i] = final_df1$hit_n[i]
+    final_df1$min_status[i] = final_df1$hit_n[i]
+    final_df1$max_status[i] = final_df1$hit_n[i]
+    }
+}
+
+
+for(i in seq(1,nrow(final_df1),1)){
+  final_df1$min_status[i] = min(as.numeric(unlist(str_split(final_df1$statuses[i],";"))))
+  final_df1$max_status[i] = max(as.numeric(unlist(str_split(final_df1$statuses[i],";"))))
+}
+```
+
+
+## Descriptive Statistics
+
+```{r}
+final_df1 = final_df2
+```
+
+
+### Number of feats
+
+```{r}
+summary(as.factor(final_df1$n_feat))
+```
+
+```{r}
+final_df11 = filter(final_df1, n_feat < 4)
+summary(as.factor(final_df11$n_feat))
+
+```
+
+
+### Number of Statuses
+
+```{r}
+as.factor(final_df11$min_status) %>% summary()
+
+final_df3 = final_df11 %>% filter(min_status <16)
+```
+
+```{r}
+as.factor(final_df3$max_status) %>% summary()
+
+final_df4 = final_df3 %>% filter(max_status <16)
+```
+
+
+
+## Univariate analysis
+
+```{r}
+u1 = glm(X~n_feat,data = final_df4, family = binomial)
+u2 = glm(X~max_status,data = final_df4, family = binomial)
+u3 = glm(X~min_status,data = final_df4, family = binomial)
+
+summary(u1)
+summary(u2)
+summary(u3)
+```
+
+All coefficients are significant
+
+## GLM
+
+```{r}
+m_int_max = glm(X ~ n_feat*max_status,
+             data = final_df4, family = binomial(link="logit"))
+
+m_int_min = glm(X ~ n_feat*min_status,
+             data = final_df4, family = binomial(link="logit"))
+
+m_int_both = glm(X ~ n_feat*min_status + n_feat*max_status,
+             data = final_df4, family = binomial(link="logit"))
+
+summary(m_int_max)
+summary(m_int_min)
+summary(m_int_both)
+```
+
+#### Anova
+
+```{r}
+anova(m_int_max, m_int_min,m_int_both, test = "Chisq")
+```
+
+### Diagnostics
+
+homoscedasticity -  is not the case for binomial
+
+#### Q-Q Plot
+
+```{r}
+qq.gam(m_int_both)
+```
+
+
+
+#### Hosmer and Lemeshow test
+
+```{r}
+library(generalhoslem)
+logitgof(final_df4$X, fitted(m_int_both), g = 9)
+```
+
+The Hosmer-Lemeshow statistic indicates a poor fit due to the significance value = 0.004118. So, probably we need to go for a Generalized Additive Model.
+
+
+# GAM
+
+```{r}
+# With Just n_feat
+m_n_feat = gam(X ~ n_feat,
+               data = final_df4,
+               family = binomial(link="logit"))
+
+# Interaction n_feat*max_status
+m_n_feat_max = gam(X ~ n_feat*max_status,
+               data = final_df4,
+               family = binomial(link="logit"))
+
+# Interaction n_feat*min_status
+m_n_feat_min = gam(X ~ n_feat*min_status,
+               data = final_df4,
+               family = binomial(link="logit"))
+
+# -------------------------------------------
+
+# With Interaction Effect
+m_interaction = gam(X ~ n_feat*max_status + n_feat*min_status,
+                    data = final_df4,
+                    family = binomial(link="logit"))
+
+
+# GAM with ti interaction effects
+
+gam_interaction_ti =gam(X ~ ti(max_status) + ti(min_status) + 
+                       ti(n_feat,max_status) + ti(n_feat,min_status),
+                     data = final_df4,
+                     family = binomial(link="logit"))
+```
+
+```{r}
+rsq = c(summary(m_n_feat)$r.sq,
+        summary(m_n_feat_max)$r.sq,
+        summary(m_n_feat_min)$r.sq,
+        summary(m_interaction)$r.sq,
+        summary(gam_interaction_ti)$r.sq)
+
+models = c("m_n_feat",
+           "m_n_feat_max",
+           "m_n_feat_min",
+           "m_interaction",
+           "gam_interaction_ti")
+
+data.frame(models,rsq) %>% arrange(-rsq)
+```
+
+gam_interaction_ti is the best model according to R2
+
+```{r}
+ubre = c(
+        summary(gam_max)$sp.criterion,
+        summary(gam_min)$sp.criterion,
+        summary(gam_both)$sp.criterion,
+        summary(gam_interaction)$sp.criterion,
+        summary(gam_interaction_ti)$sp.criterion)
+
+models = c(
+           "gam_max",
+           "gam_min",
+           "gam_both",
+           "gam_interaction",
+           "gam_interaction_ti")
+
+data.frame(models,ubre) %>% arrange(ubre)
+```
+
+"Notice that UBRE - Un-Biased Risk Estimator - is effectively just AIC rescaled, but is only used when s is known."
+
+gam_interaction_ti has the smallest UBRE.
+
+
+```{r}
+anova(m_n_feat, #1
+      m_n_feat_max, #2
+      m_n_feat_min, #3
+      m_linear, #4
+      m_interaction, #5
+      gam_max, #6
+      gam_min, #7
+      gam_both, #8
+      gam_interaction, #9
+      gam_interaction_ti, #10
+      test = "Chisq")
+```
+By ANOVA Test, gam_interaction_ti is the best model. 
+
+## GAM Diagnostics
+```{r}
+gam.check(gam_interaction_ti)
+```
+
+ti(n_feat,max_status) - k' and edf is not close, so k is not too low
+ti(min_status) - has close values of k' and edf, so, the k should be changed
+
+```{r}
+# GAM with ti interaction effects
+
+gam_interaction_ti1 =gam(X ~ ti(max_status, k = 12) + ti(n_feat, k = 6) + ti(min_status, k = 13) + 
+                       ti(n_feat,max_status) + ti(n_feat,min_status),
+                     data = final_df1,
+                     family = binomial(link="logit"))
+
+gam.check(gam_interaction_ti1)
+```
+
+Now it is looking okay. 
+
+```{r}
+summary(gam_interaction_ti1)
+```
+The edf is a summary statistic of GAM and it reflects the degree of non-linearity of a curve (Wood 2006). An edf equal to 1 is equivalent to a linear relationship, 1 < edf ≤ 2 is considered a weakly non-linear relationship, and edf > 2 implies a highly non-linear relationship
+
+```{r}
+plot(ggeffects::ggpredict(gam_interaction_ti1))
+plot(gam_interaction_ti1)
+```
+
+All of the coefficients are 
+The Hypothesis is true.
+

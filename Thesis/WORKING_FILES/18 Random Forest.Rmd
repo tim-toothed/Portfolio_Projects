@@ -1,0 +1,158 @@
+---
+title: "18 Random Forest"
+author: "Timur Sharifullin"
+date: "2023-04-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library("randomForest")
+library(randomForestExplainer)
+library(ggplot2)
+
+final_df = read.csv("fin_df_distance.csv")
+final_df = final_df[,-1]
+final_df$X = as.factor(final_df$X) 
+final_df$artist_name = as.factor(final_df$artist_name) 
+final_df1 = final_df[,c(5, 18, 21:30)]
+```
+
+```{r}
+ds0 = final_df1 %>% filter(hit_n == 0) %>% select(-hit_n)
+ds1 = final_df1 %>% filter(hit_n == 1) %>% select(-hit_n)
+ds2 = final_df1 %>% filter(hit_n == 2) %>% select(-hit_n)
+ds3 = final_df1 %>% filter(hit_n == 3) %>% select(-hit_n)
+ds4 = final_df1 %>% filter(hit_n == 4) %>% select(-hit_n)
+ds5 = final_df1 %>% filter(hit_n == 5) %>% select(-hit_n)
+ds6 = final_df1 %>% filter(hit_n == 6) %>% select(-hit_n)
+ds7 = final_df1 %>% filter(hit_n == 7) %>% select(-hit_n)
+ds8 = final_df1 %>% filter(hit_n == 8) %>% select(-hit_n)
+ds9 = final_df1 %>% filter(hit_n == 9) %>% select(-hit_n)
+ds10 = final_df1 %>% filter(hit_n == 10) %>% select(-hit_n)
+
+library(ROSE)
+ds0.rose <- ROSE(X ~ ., data = ds0, seed = 1)$data# %>% select(-artist_name)
+```
+
+
+```{r}
+# Create contingency table for original dataset
+table_original <- table(ds0[,3])
+
+# Create contingency table for balanced dataset
+table_balanced <- table(ds0.rose[,3])
+
+chisq.test(table_original, table_balanced)
+```
+
+```{r}
+library(ggplot2)
+ggplot(ds0, aes(x = target_variable)) + geom_bar()
+```
+
+
+```{r}
+set.seed(2023)
+output.forest_orig <- randomForest(X ~ ., 
+           data = ds0)
+
+output.forest_orig
+```
+
+```{r}
+
+output.forest_orig
+output.forest
+```
+
+```{r}
+forestsrc = rfsrc(formula = X ~ .,
+                  data = ds0,
+                  ntree = 5000,
+                  importance="permute",
+                  proximity = "all",
+                  seed = 2023,
+                  splitrule="auc")
+
+forestsrc
+```
+
+```{r}
+forestsrc1 = rfsrc(formula = X ~ .,
+                  data = ds1,
+                  ntree = 5000,
+                  importance="permute",
+                  proximity = "all",
+                  seed = 2023,
+                  splitrule="auc")
+
+forestsrc1
+```
+
+```{r}
+forestsrc2 = rfsrc(formula = X ~ .,
+                  data = ds2,
+                  ntree = 5000,
+                  importance="permute",
+                  proximity = "all",
+                  seed = 2023,
+                  splitrule="auc")
+
+forestsrc2
+```
+
+```{r}
+set.seed(2023)
+output.forest <- randomForest(X ~ ., 
+           data = ds0.rose,
+           importance="permute",
+           proximity = "all")
+
+output.forest
+
+# View the forest results.
+print(output.forest) 
+
+
+print(importance(output.forest,type = 2)) 
+
+library(rfPermute)
+rp = rfPermute(X ~ ., 
+          data = ds0.rose,
+          ntree = 500,
+          num.rep = 50)
+rp
+
+importance_frame <- measure_importance(output.forest)
+
+importance_frame
+```
+
+```{r}
+# Importing essential libraries
+library(ggplot2)
+library(dplyr)
+library(caret)
+library(randomForestSRC)
+
+# Build SRF model
+BRFC <- RF_balanced(ntree = 150, seed = 2)
+
+# Create Stratified K-fold cross validation
+cv <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE, summaryFunction = twoClassSummary)
+
+# Evaluate BRFC model
+metrics <- c("F1", "Recall", "Precision")
+scores <- train(X, y, method = BRFC, trControl = cv, metric = metrics)
+
+# Get average evaluation metrics
+mean_f1 <- mean(scores$F1)
+mean_recall <- mean(scores$Recall)
+mean_precision <- mean(scores$Precision)
+cat(paste("Mean F1: ", round(mean_f1, 3), "\n"))
+cat(paste("Mean Recall: ", round(mean_recall, 3), "\n"))
+cat(paste("Mean Precision: ", round(mean_precision, 3), "\n"))
+
+
+```
+

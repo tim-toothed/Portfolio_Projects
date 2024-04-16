@@ -1,0 +1,251 @@
+---
+title: "14 Descriptive Statistics"
+author: "Timur Sharifullin"
+date: "2023-04-09"
+output: 
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(lubridate)
+library(DT)
+knitr::opts_chunk$set(message= F, warning=F)
+```
+
+```{r}
+# Preprocessing
+df_devil1 = read.csv("FINAL_TABLE.csv")
+df_devil1 = rename(df_devil1, rmsP_median = rmseP_median)
+df_devil1 = rename(df_devil1, rmsP_std = rmseP_std)
+df_devil1 = rename(df_devil1, rmsH_median = rmseH_median)
+df_devil1 = rename(df_devil1, rmsH_std = rmseH_std)
+df_devil1$artist_name = as.factor(df_devil1$artist_name)
+df_devil1$X = as.factor(df_devil1$X)
+df_devil1$album_release_date = ymd(df_devil1$album_release_date)
+df_devil1$key_name = as.factor(df_devil1$key_name) 
+df_devil1$mode_name = as.factor(df_devil1$mode_name) 
+df_devil1$key_mode = as.factor(df_devil1$key_mode) 
+df_devil1$remake = as.factor(df_devil1$remake)
+df_devil1$track_status = as.factor(df_devil1$track_status)
+final_df = df_devil1
+```
+
+```{r}
+df_work = final_df %>% select(-download_link, -track_number, -explicit, -key_name, -mode_name, -key_mode,-artist_id,-album_id) 
+
+summary(df_work)
+```
+
+## Number of unique Artists
+
+```{r}
+length(unique(df_work$artist_name))
+```
+
+## Number of unique Tracks
+
+```{r}
+length(unique(df_work$track_id))
+```
+
+# Number of tracks by artist
+
+```{r}
+datatable(dplyr::count(df_work,artist_name) %>% arrange(n) %>% head(65), options = list(
+  paging = T,
+  pageLength =  10))
+```
+The discographies of some artists are extremely small - 65 artists have less than 20 tracks.
+
+```{r}
+df_ind_count = dplyr::count(df_work,artist_name) %>% arrange(-n)
+datatable(df_ind_count %>% head(20), options = list(
+  paging = T,
+  pageLength =  10))
+```
+At the same time, some artists have more than 100 tracks
+
+```{r}
+summary(df_ind_count$n)
+```
+
+## Hits / Non-hits
+
+```{r}
+count(df_work,track_status)
+```
+Number of non-hits before the 1st hit - 3500
+Number of non-hits after 1 hit - 2381
+Number of non-hits after 2 hits - 1380
+Number of non-hits after 3 hits - 910
+Number of non-hits after 4 hits - 1074
+Number of non-hits after 5 hits - 575
+Number of non-hits after 6 hits - 316
+Number of non-hits after 7 hits - 301
+Number of non-hits after 8 hits - 211 
+
+Number of 1st hits - 347
+Number of hits after 1 hit - 240
+Number of hits after 2 hits - 178
+Number of hits after 3 hits - 175
+Number of hits after 4 hits - 136
+Number of hits after 5 hits - 121
+Number of hits after 6 hits - 78
+Number of hits after 7 hits - 74
+Number of hits after 8 hits - 100
+
+```{r}
+library(dplyr)
+#00
+temp = count(df_work[str_detect(df_work$track_status,"00"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 00:", count(df_work[str_detect(df_work$track_status,"00"),],track_status) %>% select(n) %>% sum(), "obs",
+      "|", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#01
+temp = count(df_work[str_detect(df_work$track_status,"01"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 01:", count(df_work[str_detect(df_work$track_status,"01"),],track_status) %>% select(n) %>% sum(), "obs",
+      "|", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#02
+temp = count(df_work[str_detect(df_work$track_status,"02"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 02:", count(df_work[str_detect(df_work$track_status,"02"),],track_status) %>% select(n) %>% sum(), "obs",
+      "|", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#03
+temp = count(df_work[str_detect(df_work$track_status,"03"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 03:", count(df_work[str_detect(df_work$track_status,"03"),],track_status) %>% select(n) %>% sum(), "obs",
+      "|", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#04
+temp = count(df_work[str_detect(df_work$track_status,"04"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 04:", count(df_work[str_detect(df_work$track_status,"04"),],track_status) %>% select(n) %>% sum(), "obs",
+      "|", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#05
+temp = count(df_work[str_detect(df_work$track_status,"05"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 05:", count(df_work[str_detect(df_work$track_status,"05"),],track_status) %>% select(n) %>% sum(), "obs",
+      " |", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#06
+temp = count(df_work[str_detect(df_work$track_status,"06"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 06:", count(df_work[str_detect(df_work$track_status,"06"),],track_status) %>% select(n) %>% sum(), "obs",
+      " |", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#07
+temp = count(df_work[str_detect(df_work$track_status,"07"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 07:", count(df_work[str_detect(df_work$track_status,"07"),],track_status) %>% select(n) %>% sum(), "obs",
+      " |", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#08
+temp = count(df_work[str_detect(df_work$track_status,"08"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 08:", count(df_work[str_detect(df_work$track_status,"08"),],track_status) %>% select(n) %>% sum(), "obs",
+      " |", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#09
+temp = count(df_work[str_detect(df_work$track_status,"09"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 09:", count(df_work[str_detect(df_work$track_status,"09"),],track_status) %>% select(n) %>% sum(), "obs",
+      " |", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#10
+temp = count(df_work[str_detect(df_work$track_status,"10"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 10:", count(df_work[str_detect(df_work$track_status,"10"),],track_status) %>% select(n) %>% sum(), "obs",
+      " |", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#11
+temp = count(df_work[str_detect(df_work$track_status,"11"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 11:", count(df_work[str_detect(df_work$track_status,"11"),],track_status) %>% select(n) %>% sum(), "obs",
+      " |", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#12
+temp = count(df_work[str_detect(df_work$track_status,"12"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 12:", count(df_work[str_detect(df_work$track_status,"12"),],track_status) %>% select(n) %>% sum(), "obs",
+      " |", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#13
+temp = count(df_work[str_detect(df_work$track_status,"13"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 13:", count(df_work[str_detect(df_work$track_status,"13"),],track_status) %>% select(n) %>% sum(), "obs",
+      " |", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#14
+temp = count(df_work[str_detect(df_work$track_status,"14"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 14:", count(df_work[str_detect(df_work$track_status,"14"),],track_status) %>% select(n) %>% sum(), "obs",
+      " |", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+
+#15
+temp = count(df_work[str_detect(df_work$track_status,"15"),],track_status) %>% arrange(track_status) %>% select(n)
+paste("Model 15:", count(df_work[str_detect(df_work$track_status,"15"),],track_status) %>% select(n) %>% sum(), "obs",
+      " |", round((temp[1,1]/(temp[2,1]+temp[1,1]))*100),"% hits")
+```
+
+There is enough data for 11 models, but the sample is not balanced
+
+Weighting: You can assign weights to the observations in the logistic regression model to give higher importance to the minority class. The "glm" function in R allows you to specify weights using the "weights" argument.
+
+```{r eval=FALSE}
+dfxts_none = final_df %>% filter(X == "none")
+
+g1 = ggplot(data = dfxts_none, aes(x = hit_n)) + 
+  geom_histogram(aes(y = ..density..), color = "#000000", fill = "#0099F8", bins = 89) +
+  geom_density(color = "#000000", fill = "#F85700", alpha = 0.7) +
+
+  scale_x_continuous(breaks = seq(0,20,1)) +
+  labs(x = "Non-Hits after N Hits", "Number of Non-Hits") +
+  coord_cartesian(xlim = c(0,20))
+
+dfxts_hit = final_df %>% filter(X == "hit")
+
+g2 = ggplot(data = dfxts_hit, aes(x = hit_n)) + 
+  geom_histogram(aes(y = ..density..), color = "#000000", fill = "#0099F8", bins = 89) +
+  geom_density(color = "#000000", fill = "#F85700", alpha = 0.7) +
+
+  scale_x_continuous(breaks = seq(0,89,1)) +
+  labs(x = "Hits after N Hits", "Number of Non-Hits")
+
+g1
+g2
+```
+
+
+## Аудио-Характеристики
+
+At the moment - these characteristics have only a general description - that is, they will not necessarily mean exactly that, since the interpretation often depends on the genre of music - that is, you need to conduct PCA and consider individual tracks in order to most correctly interpret these variables
+
+1. The higher is *bw_std*, the more complex in frequency-terms is the sound
+2. The higher is *centroid_median*, the brighter is the sound
+3. The higher is *centroid_std*, the more variability in sound and therefore - more complexity
+4. The higher is *contrast_median*, the more sharpness in sound
+5. The higher is *polyfeat_median* faster tempo or more energetic beat 
+6. The higher is *polyfeat_std*, the more complex or varied rhythmic or melodic patterns
+7. The higher is *rmsH_median*, the more melodic and tonal elements in the music, such as instrumentals, vocals, or synthesized sounds
+8. The higher is *rmsH_std*, the loudness of the harmonic content changes frequently
+9. The higher is *rmsP_median*, the more intense and energetic beat
+10. The higher is *rmsP_std*, the more dynamic and varied beat
+11. The higher is *zcr_median*, the greater presence of percussive elements
+
+
+```{r}
+library(ggcorrplot)
+corr_matrix = cor(df_work[,10:23])
+cp = ggcorrplot(corr_matrix,hc.order = TRUE, outline.col = "black")
+cp
+
+```
+
+SENT TO PCA:
+
+1. polyfeat_std & rmsH_std (0.81)
+
+2. zcr_median & centroid_median (0.81)
+
+
+3. rmsH_median & polyfeat_median (-0.73)
+
+4. bw_std & centroid_std (0.6)

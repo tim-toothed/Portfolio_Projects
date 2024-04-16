@@ -1,0 +1,663 @@
+---
+title: "666 Свалка"
+author: "Timur Sharifullin"
+date: "2023-04-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Descriptive Stats
+
+Важно учитывать diversity артистов в сэмпле, иначе может сложиться ситуация, что успех будет ассоциирован не с конкретным звучанием, а с конкретным артистом. Важно, чтобы в сэмпле не было артистов-outliers. 
+
+```{r}
+datka = ds0
+datka1 =  datka %>% group_by(artist_name) %>% summarize(n = n())
+paste("Статус - 0 хитов, Пропорция Артисты/Треки:",
+      length(unique(datka$artist_name)), "артистов |",
+      nrow(datka), "треков |",
+      median(datka1$n), "треков на 1 артиста (медиана)", mean(datka1$n))
+
+datka = ds1
+datka1 =  datka %>% group_by(artist_name) %>% summarize(n = n())
+paste("Статус - 1 хитов, Пропорция Артисты/Треки:",
+      length(unique(datka$artist_name)), "артистов |",
+      nrow(datka), "треков |",
+      median(datka1$n), "треков на 1 артиста (медиана)", mean(datka1$n))
+
+datka = ds2
+datka1 =  datka %>% group_by(artist_name) %>% summarize(n = n())
+paste("Статус - 2 хитов, Пропорция Артисты/Треки:",
+      length(unique(datka$artist_name)), "артистов |",
+      nrow(datka), "треков |",
+      median(datka1$n), "треков на 1 артиста (медиана)", mean(datka1$n))
+
+datka = ds3
+datka1 =  datka %>% group_by(artist_name) %>% summarize(n = n())
+paste("Статус - 3 хитов, Пропорция Артисты/Треки:",
+      length(unique(datka$artist_name)), "артистов |",
+      nrow(datka), "треков |",
+      median(datka1$n), "треков на 1 артиста (медиана)", mean(datka1$n))
+
+datka = ds4
+datka1 =  datka %>% group_by(artist_name) %>% summarize(n = n())
+paste("Статус - 4 хитов, Пропорция Артисты/Треки:",
+      length(unique(datka$artist_name)), "артистов |",
+      nrow(datka), "треков |",
+      median(datka1$n), "треков на 1 артиста (медиана)", mean(datka1$n))
+
+datka = ds5
+datka1 =  datka %>% group_by(artist_name) %>% summarize(n = n())
+paste("Статус - 5 хитов, Пропорция Артисты/Треки:",
+      length(unique(datka$artist_name)), "артистов |",
+      nrow(datka), "треков |",
+      median(datka1$n), "треков на 1 артиста (медиана)", mean(datka1$n))
+```
+
+
+```{r}
+datka2 = final_df1[final_df1$hit_n <= 5,] %>% group_by(hit_n, artist_name,X) %>% summarize(n = n())
+
+findoutlier <- function(x) {
+  return(x < quantile(x, .25) - 1.5*IQR(x) | x > quantile(x, .75) + 1.5*IQR(x))
+}
+
+outlier = ifelse(findoutlier(datka2$n), TRUE, FALSE)
+
+datka2$outlier = outlier
+
+datka2
+```
+
+
+## Excluding Outliers
+```{r}
+datka2_0 = datka2[datka2$hit_n==0,]
+datka2_1 = datka2[datka2$hit_n==1,]
+datka2_2 = datka2[datka2$hit_n==2,]
+datka2_3 = datka2[datka2$hit_n==3,]
+datka2_4 = datka2[datka2$hit_n==4,]
+datka2_5 = datka2[datka2$hit_n==5,]
+
+artist_to_exclude_0 = unique(as.character(datka2_0[datka2_0$outlier == TRUE,]$artist_name))
+artist_to_exclude_1 = unique(as.character(datka2_1[datka2_1$outlier == TRUE,]$artist_name))
+artist_to_exclude_2 = unique(as.character(datka2_2[datka2_2$outlier == TRUE,]$artist_name))
+artist_to_exclude_3 = unique(as.character(datka2_3[datka2_3$outlier == TRUE,]$artist_name))
+artist_to_exclude_4 = unique(as.character(datka2_4[datka2_4$outlier == TRUE,]$artist_name))
+artist_to_exclude_5 = unique(as.character(datka2_5[datka2_5$outlier == TRUE,]$artist_name))
+
+ds0_exclude = c()
+for(i in seq(1, nrow(ds0),1)){
+  ds0_exclude = append(x = ds0_exclude, values = ds0$artist_name[i] %in% artist_to_exclude_0)
+}
+
+ds1_exclude = c()
+for(i in seq(1, nrow(ds1),1)){
+  ds1_exclude = append(x = ds1_exclude, values = ds1$artist_name[i] %in% artist_to_exclude_1)
+}
+
+ds2_exclude = c()
+for(i in seq(1, nrow(ds2),1)){
+  ds2_exclude = append(x = ds2_exclude, values = ds2$artist_name[i] %in% artist_to_exclude_2)
+}
+
+ds3_exclude = c()
+for(i in seq(1, nrow(ds3),1)){
+  ds3_exclude = append(x = ds3_exclude, values = ds3$artist_name[i] %in% artist_to_exclude_3)
+}
+
+ds4_exclude = c()
+for(i in seq(1, nrow(ds4),1)){
+  ds4_exclude = append(x = ds4_exclude, values = ds4$artist_name[i] %in% artist_to_exclude_4)
+}
+
+ds5_exclude = c()
+for(i in seq(1, nrow(ds5),1)){
+  ds5_exclude = append(x = ds5_exclude, values = ds5$artist_name[i] %in% artist_to_exclude_5)
+}
+
+
+ds0_plus = ds0[ds0_exclude,]
+ds1_plus = ds1[ds1_exclude,]
+ds2_plus = ds2[ds2_exclude,]
+ds3_plus = ds3[ds3_exclude,]
+ds4_plus = ds4[ds4_exclude,]
+ds5_plus = ds5[ds5_exclude,]
+```
+
+#-------------------------------------------
+```{r}
+final_df1 = final_df %>% select(artist_name, track_name, album_release_date)
+final_df1$number_of_bruv = NA
+
+vector_check = c()
+
+for(g in seq(1, nrow(final_df),1)){
+  cat(paste("track", g,"\r"))
+    
+  vector_check = as.numeric(as.Date(final_df$album_release_date[g]) - as.Date(final_df$album_release_date))
+  
+  vector_check = (vector_check > -31 & vector_check < 1)
+  final_df1$number_of_bruv[g] = length(vector_check[vector_check==TRUE])
+}
+
+final_df_super = final_df[!final_df1$number_of_bruv < 101,]
+```
+
+
+#-------------------------------------------------------
+
+
+
+```{r}
+library(caret)
+library(ROSE)
+library(pROC)
+set.seed(2023)
+
+# Balancing Dataset
+
+#ds0.rose <- ROSE(X ~ ., data = ds0, seed = 2023)$data
+
+# Data Partition
+
+sample = sample(c(TRUE, FALSE), nrow(ds0), replace=TRUE, prob=c(0.7,0.3))
+train  = ds0[sample, ]
+test   = ds0[!sample, ]
+
+# Model
+library(ranger)
+rf0 = ranger(X ~ .,
+             train,
+             sample.fraction = c(0.5, 0.5),
+             keep.inbag = TRUE)
+
+# VIMP
+
+varImp(rf0)
+
+# Confusion Matrix
+
+confusionMatrix(predict(rfrose, test), test$X, positive = 'hit')
+
+# ROC Plot
+
+test_pred = as.numeric(predict(rfrose, test))
+roc.test <- roc(test$X ~ test_pred, plot = TRUE, print.auc = TRUE)
+auc(roc.test)
+```
+
+```{r}
+# Balancing Dataset
+
+ds1.rose <- ROSE(X ~ ., data = ds1, seed = 2023)$data
+
+# Data Partition
+
+sample = sample(c(TRUE, FALSE), nrow(ds1.rose), replace=TRUE, prob=c(0.7,0.3))
+train  = ds1.rose[sample, ]
+test   = ds1.rose[!sample, ]
+
+# Model
+
+rfrose = randomForest(X ~ ., data=train,ntree = 1000)
+
+# VIMP
+
+varImpPlot(rfrose)
+
+# Confusion Matrix
+
+confusionMatrix(predict(rfrose, test), test$X, positive = 'hit')
+
+# ROC Plot
+
+test_pred = as.numeric(predict(rfrose, test))
+roc.test <- roc(test$X ~ test_pred, plot = TRUE, print.auc = TRUE)
+auc(roc.test)
+```
+
+```{r}
+# Balancing Dataset
+
+ds2.rose <- ROSE(X ~ ., data = ds2, seed = 2023)$data
+
+# Data Partition
+
+sample = sample(c(TRUE, FALSE), nrow(ds2.rose), replace=TRUE, prob=c(0.7,0.3))
+train  = ds2.rose[sample, ]
+test   = ds2.rose[!sample, ]
+
+# Model
+
+rfrose = randomForest(X ~ ., data=train,ntree = 1000)
+
+# VIMP
+
+varImpPlot(rfrose)
+
+# Confusion Matrix
+
+confusionMatrix(predict(rfrose, test), test$X, positive = 'hit')
+
+# ROC Plot
+
+test_pred = as.numeric(predict(rfrose, test))
+roc.test <- roc(test$X ~ test_pred, plot = TRUE, print.auc = TRUE)
+auc(roc.test)
+```
+
+```{r}
+# Balancing Dataset
+
+ds3.rose <- ROSE(X ~ ., data = ds3, seed = 2023)$data
+
+# Data Partition
+
+sample = sample(c(TRUE, FALSE), nrow(ds3.rose), replace=TRUE, prob=c(0.7,0.3))
+train  = ds3.rose[sample, ]
+test   = ds3.rose[!sample, ]
+
+# Model
+
+rfrose = randomForest(X ~ ., data=train,ntree = 1000)
+
+# VIMP
+
+varImpPlot(rfrose)
+
+# Confusion Matrix
+
+confusionMatrix(predict(rfrose, test), test$X, positive = 'hit')
+
+# ROC Plot
+
+test_pred = as.numeric(predict(rfrose, test))
+roc.test <- roc(test$X ~ test_pred, plot = TRUE, print.auc = TRUE)
+auc(roc.test)
+```
+
+```{r}
+# Balancing Dataset
+
+ds4.rose <- ROSE(X ~ ., data = ds4, seed = 2023)$data
+
+# Data Partition
+
+sample = sample(c(TRUE, FALSE), nrow(ds4.rose), replace=TRUE, prob=c(0.7,0.3))
+train  = ds4.rose[sample, ]
+test   = ds4.rose[!sample, ]
+
+# Model
+
+rfrose = randomForest(X ~ ., data=train,ntree = 1000)
+
+# VIMP
+
+varImpPlot(rfrose)
+
+# Confusion Matrix
+
+confusionMatrix(predict(rfrose, test), test$X, positive = 'hit')
+
+# ROC Plot
+
+test_pred = as.numeric(predict(rfrose, test))
+roc.test <- roc(test$X ~ test_pred, plot = TRUE, print.auc = TRUE)
+auc(roc.test)
+```
+
+```{r}
+# Balancing Dataset
+
+ds5.rose <- ROSE(X ~ ., data = ds5, seed = 2023)$data
+
+# Data Partition
+
+sample = sample(c(TRUE, FALSE), nrow(ds5.rose), replace=TRUE, prob=c(0.7,0.3))
+train  = ds5.rose[sample, ]
+test   = ds5.rose[!sample, ]
+
+# Model
+
+rfrose = randomForest(X ~ ., data=train,ntree = 1000)
+
+# VIMP
+
+varImpPlot(rfrose)
+
+# Confusion Matrix
+
+confusionMatrix(predict(rfrose, test), test$X, positive = 'hit')
+
+# ROC Plot
+
+test_pred = as.numeric(predict(rfrose, test))
+roc.test <- roc(test$X ~ test_pred, plot = TRUE, print.auc = TRUE)
+auc(roc.test)
+```
+
+
+
+```{r}
+par(mfrow=c(2,5))
+
+for(i in 2:11) partialPlot(x = rfrose,
+            pred.data = train,
+            x.var = colnames(train)[2])
+
+library(edarf)
+```
+```{r}
+colnames(train)[2:11]
+```
+
+```{r}
+library(pdp)
+```
+
+
+
+
+```{r}
+library(randomForestExplainer)
+rfrose =  randomForest::randomForest(X ~ ., data=train,ntree = 1000,localImp = TRUE,weights)
+explain_forest(rfrose, interactions = TRUE, data = train)
+```
+
+#------------------------
+
+```{r}
+model.binomial <- glm(X ~ ., data = ds0, family = binomial(link = logit))
+model.binomial_under <- glm(X ~ log(laid_back_groovy_lyrical), data = under, family = binomial)
+model.binomial_over <- glm(X ~ ., data = over, family = binomial(link = logit))
+
+
+model.binomial_under <- glm(X ~ ., data = under, family = binomial)
+summary(model.binomial_under)
+summary(model.binomial_over)
+
+library(aod)
+wald.test(Sigma = vcov(model.binomial_under), b = coef(model.binomial_under), Terms = 1)
+```
+
+## DS0
+
+```{r}
+
+set.seed(2023)
+final_df = read.csv("fin_df_distance_months.csv")
+final_df$X = factor(final_df$X, levels = c("none","hit"))
+final_df$artist_name = as.factor(final_df$artist_name) 
+final_df1 = final_df[,c(3, 5, 18, 21:30)]
+
+ds0 = final_df1 %>% filter(hit_n == 0) %>% select(-hit_n, -artist_name)
+
+model0 <- glm(X ~ rmsP_median + rmsP_std + contrast_median + contrast_std +
+                              tonnetz_median + tonnetz_std + sound_brightness_noisiness +
+                              laid_back_groovy_lyrical + quiet_and_melodic + overall_spectral_Variability,
+                            data = ds0,
+                            family = binomial)
+
+probabilities <- predict(model0, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "hit", "none")
+
+# Select only numeric predictors
+ds0_1 <- ds0 %>%
+  dplyr::select_if(is.numeric) 
+predictors <- colnames(ds0)
+# Bind the logit and tidying the data for plot
+ds0_1 <- ds0_1 %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+# Plot
+plot0 = ggplot(ds0_1, aes(logit, predictor.value))+
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_smooth(method = "loess") + 
+  labs(title = "0 Previous Hits") +
+  theme_bw() + 
+  facet_wrap(~predictors, scales = "free_y")
+
+ggsave(plot = plot0, filename = "0_previous_hits_rshp.png", device = "png")
+plot0
+```
+
+### DS1
+
+```{r}
+library(ROSE)
+ds1 = final_df1 %>% filter(hit_n == 1) %>% select(-hit_n, -artist_name)
+
+downsample <- ovun.sample(X~. ,
+                               data = ds1 ,
+                               method = "under")$data
+
+model1 <- glm(X ~ rmsP_median + rmsP_std + contrast_median + contrast_std +
+                              tonnetz_median + tonnetz_std + sound_brightness_noisiness +
+                              laid_back_groovy_lyrical + quiet_and_melodic + overall_spectral_Variability,
+                            data = downsample,
+                            family = binomial)
+summary(model1)
+
+probabilities <- predict(model1, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "hit", "none")
+
+# Select only numeric predictors
+ds1_1 <- ds1 %>%
+  dplyr::select_if(is.numeric) 
+predictors <- colnames(ds1)
+# Bind the logit and tidying the data for plot
+ds1_1 <- ds1_1 %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+# Plot
+plot1 = ggplot(ds1_1, aes(logit, predictor.value))+
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_smooth(method = "loess") +
+  labs(title = "1 Previous Hits") +
+  theme_bw() + 
+  facet_wrap(~predictors, scales = "free_y")
+
+ggsave(plot = plot1, filename = "1_previous_hits_rshp.png", device = "png")
+```
+
+### DS2
+
+```{r}
+ds2 = final_df1 %>% filter(hit_n == 2) %>% select(-hit_n, -artist_name)
+
+model2 <- glm(X ~ rmsP_median + rmsP_std + contrast_median + contrast_std +
+                              tonnetz_median + tonnetz_std + sound_brightness_noisiness +
+                              laid_back_groovy_lyrical + quiet_and_melodic + overall_spectral_Variability,
+                            data = ds2,
+                            family = binomial)
+
+probabilities <- predict(model2, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "hit", "none")
+
+# Select only numeric predictors
+ds2_1 <- ds2 %>%
+  dplyr::select_if(is.numeric) 
+predictors <- colnames(ds2)
+# Bind the logit and tidying the data for plot
+ds2_1 <- ds2_1 %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+# Plot
+plot2 = ggplot(ds2_1, aes(logit, predictor.value))+
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_smooth(method = "loess") + 
+  labs(title = "2 Previous Hits") +
+  theme_bw() + 
+  facet_wrap(~predictors, scales = "free_y")
+
+ggsave(plot = plot2, filename ="2_previous_hits_rshp.png", device = "png")
+```
+
+### DS3
+
+```{r}
+ds3 = final_df1 %>% filter(hit_n == 3) %>% select(-hit_n, -artist_name)
+
+model3 <- glm(X ~ rmsP_median + rmsP_std + contrast_median + contrast_std +
+                              tonnetz_median + tonnetz_std + sound_brightness_noisiness +
+                              laid_back_groovy_lyrical + quiet_and_melodic + overall_spectral_Variability,
+                            data = ds3,
+                            family = binomial)
+
+probabilities <- predict(model3, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "hit", "none")
+
+# Select only numeric predictors
+ds3_1 <- ds3 %>%
+  dplyr::select_if(is.numeric) 
+predictors <- colnames(ds3)
+# Bind the logit and tidying the data for plot
+ds3_1 <- ds3_1 %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+# Plot
+plot3 = ggplot(ds3_1, aes(logit, predictor.value))+
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_smooth(method = "loess") + 
+  labs(title = "3 Previous Hits") +
+  theme_bw() + 
+  facet_wrap(~predictors, scales = "free_y")
+
+ggsave(plot = plot3, filename =  "3_previous_hits_rshp.png", device = "png")
+```
+
+### DS4
+
+```{r}
+ds4 = final_df1 %>% filter(hit_n == 4) %>% select(-hit_n, -artist_name)
+
+model4 <- glm(X ~ rmsP_median + rmsP_std + contrast_median + contrast_std +
+                              tonnetz_median + tonnetz_std + sound_brightness_noisiness +
+                              laid_back_groovy_lyrical + quiet_and_melodic + overall_spectral_Variability,
+                            data = ds4,
+                            family = binomial)
+
+probabilities <- predict(model4, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "hit", "none")
+
+# Select only numeric predictors
+ds4_1 <- ds4 %>%
+  dplyr::select_if(is.numeric) 
+predictors <- colnames(ds4)
+# Bind the logit and tidying the data for plot
+ds4_1 <- ds4_1 %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+# Plot
+plot4 = ggplot(ds4_1, aes(logit, predictor.value))+
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_smooth(method = "loess") + 
+  labs(title = "4 Previous Hits") +
+  theme_bw() + 
+  facet_wrap(~predictors, scales = "free_y")
+
+ggsave(plot = plot4,filename =  "4_previous_hits_rshp.png", device = "png")
+```
+
+### DS5
+
+```{r}
+ds5 = final_df1 %>% filter(hit_n == 5) %>% select(-hit_n, -artist_name)
+
+model5 <- glm(X ~ rmsP_median + rmsP_std + contrast_median + contrast_std +
+                              tonnetz_median + tonnetz_std + sound_brightness_noisiness +
+                              laid_back_groovy_lyrical + quiet_and_melodic + overall_spectral_Variability,
+                            data = ds5,
+                            family = binomial(logit))
+
+probabilities <- predict(model5, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "hit", "none")
+
+# Select only numeric predictors
+ds5_1 <- ds5 %>%
+  dplyr::select_if(is.numeric) 
+predictors <- colnames(ds5)
+# Bind the logit and tidying the data for plot
+ds5_1 <- ds5_1 %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+# Plot
+ggplot(ds5_1[ds5_1$predictors == sort(unique(ds5_1$predictors))[6],], aes(y = logit, x = predictor.value))+
+  geom_point(size = 0.3, alpha = 0.3) +
+  geom_smooth(method = "loess") + 
+  labs(title = "5 Previous Hits") +
+  theme_bw() + 
+  facet_wrap(~predictors, scales = "free_x")
+plot5
+
+#ggsave(plot = plot5, filename =  "5_previous_hits_rshp.png", device = "png")
+library(dispmod)
+glm.binomial.disp(obj =  model5)
+```
+
+1. Linear (decrease)
+2. Inverted U-shape
+3. Curved (increase at the end)
+4. U-Shape
+5. Mostly Linear (Slightly U-Shaped at the start)
+6. Linear (decrease)
+7. Linear (decrease)
+8. Linear (decrease)
+9. 
+10.
+
+```{r}
+model5 <- glm(X ~ rmsP_median + rmsP_std + contrast_median + contrast_std +
+                              tonnetz_median + tonnetz_std + sound_brightness_noisiness +
+                              laid_back_groovy_lyrical + quiet_and_melodic + overall_spectral_Variability,
+                            data = ds5,
+                            family = binomial(logit))
+
+dim(ds5)
+```
+
+
+```{r}
+library(mgcv)
+gam1 <- gam(X ~ s(rmsP_median) + s(rmsP_std) + s(contrast_median) + s(contrast_std) +
+                              s(tonnetz_median) + s(tonnetz_std) + s(sound_brightness_noisiness) +
+                              s(laid_back_groovy_lyrical) + s(overall_spectral_Variability),
+                            data = ds1,
+                            family = binomial)
+summary(gam1)
+```
+
+# Correlation
+```{r}
+library(corrtable)
+library(ggcorrplot)
+df_cor = final_df1[,2:8]
+colnames(df_cor)[1] = "Drums Energy"
+colnames(df_cor)[2] = "Drums Complex."
+colnames(df_cor)[3] = "Instr. Variety"
+colnames(df_cor)[4] = "Mix. Quality"
+colnames(df_cor)[5] = "Harmonic Rich."
+colnames(df_cor)[6] = "Mix. Character"
+colnames(df_cor)[7] = "Emo. Intensity"
+
+save_correlation_matrix(df = df_cor,
+                        type = "spearman",
+                        use = "lower",
+                        show_significance = TRUE,
+                        filename = "cor_table_audio.csv")
+
+
+cr_matrix = cor(final_df1[,2:8], method = "pearson")
+cp = ggcorrplot(cr_matrix,hc.order = TRUE, outline.col = "black",lab = TRUE, type = "lower",show.legend = F)
+cp 
+```

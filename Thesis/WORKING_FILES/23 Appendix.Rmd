@@ -1,0 +1,54 @@
+---
+title: "Appendix"
+author: "Timur Sharifullin"
+date: "2023-05-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(stringr)
+library(table1)
+final_df = read.csv("fin_df_distance_year.csv")
+```
+
+# Cleaning the dataset
+```{r}
+final_df = final_df %>% select(track_id, artist_name, Song_Success = X,album_release_date,hit_n,
+                               Drums_Energy = rmsP_median, Drums_Complexity = rmsP_std,
+                               Variety_of_musical_instruments = contrast_median,
+                               Mixing_Quality = contrast_std,
+                               Harmonic_Richness = tonnetz_median,
+                               Mixing_Character = sound_brightness_noisiness,
+                               Emotional_Intensity = laid_back_groovy_lyrical,
+                               artists_all)
+
+# Change the class of variables
+final_df$artist_name = as.factor(final_df$artist_name)
+final_df$Song_Success = as.factor(final_df$Song_Success)
+final_df$album_release_date = as.Date(final_df$album_release_date)
+
+# Remove observations that were added by error
+## Date errors
+final_df = final_df[-which(final_df$album_release_date>as.Date("2022-03-06")),]
+
+# Add guest number and guest presence
+final_df$is_feat = str_detect(final_df$artists_all,";") %>% as.factor()
+final_df$n_feat = str_count(final_df$artists_all,";") %>% as.factor()
+
+# Remove technical columns
+final_df = final_df %>% select(-artists_all)
+
+# Save the final dataset
+write.csv(final_df, "absolute_final_df.csv",row.names = F)
+```
+
+
+```{r}
+summary(final_df)
+```
+
+
+
+
+
