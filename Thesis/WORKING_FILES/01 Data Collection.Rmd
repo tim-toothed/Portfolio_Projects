@@ -115,7 +115,7 @@ write.csv(yandex, "C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ
 yandex = read.csv("C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/yandex_scraping.csv")
 ```
 
-# Чарт Apple Music до 21 октября 2020
+# Apple Music Chart before 21 Oct 2020
 ```{r}
 # Create main table
 
@@ -195,7 +195,7 @@ apple = read.csv("C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/
 write.csv(apple1, "C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/apple_posle_21_scraping.csv")
 ```
 
-# Песни года VK Music
+# Songs of the year VK Music
 ```{r}
 # 2020 год
 remDr$navigate("https://vk.com/music/playlist/-147845620_2262")
@@ -217,12 +217,12 @@ titlevk1 = remDr$findElements(using = 'xpath',
 titlevk = lapply(titlevk1, function (x) x$getElementText())  %>% unlist()
 vk_2021 = data.frame(artist = artistvk, title = titlevk)
 
-# Объединить таблицы
+# Combine tables
 vk_music = rbind(vk_2020,vk_2021)
 ```
 
 
-# Обработка Apple Music после 21
+# Processing Apple Music after 21 Oct
 ```{r}
 apple2 = apple1 %>% mutate(is_and = str_detect(apple1$artist,"&")) 
 apple2 %>% arrange(is_and, artist)
@@ -234,7 +234,7 @@ apple2 = apple2 %>% mutate_all(na_if,"") %>% mutate_all(na_if," ") %>% na.omit()
 rownames(apple2) = NULL
 apple2 = apple2 %>% arrange(-is_and, artist)
 
-# список дуэтов
+# list of duets
 list_of_duets = filter(apple2, is_and==T)
 list_of_duets = list_of_duets[,1]
 list_of_duets = strsplit(list_of_duets, ", ") %>% unlist() %>% unique()
@@ -242,60 +242,60 @@ keep = str_detect(list_of_duets,"&")
 list_of_duets = list_of_duets[keep]
 duets = str_replace_all(list_of_duets,  " & ", "; ")
 
-# разделитель ; между исполнителями
+# delimiter ; between performers
 apple2[,1] = str_replace_all(apple2[,1], ", ", "; ")
 apple2 = apple2[,-3]
 ```
 
-# Обработка Apple Music до 21
+# Processing Apple Music before 21 Oct
 ```{r}
-# удаление лишнего столбца
+# remove column
 apple = apple[,-1]
 apple3 = apple 
 
-#  разделитель ; между исполнителями
+#  delimiter ; between performers
 apple3[,1] = str_replace_all(apple[,1], " & ", "; ")
 
-# замена ; во всех дуэтах на &
+# replacement ; in all duets on &
 for (i in seq(from = 1, to = length(duets), by = 1)){
 apple3[,1] = str_replace_all(string = apple3[,1], duets[i], list_of_duets[i])
 }
 
-# Совмещение таблиц по Apple Music
+# Combining tables using Apple Music
 apple_music = rbind(apple3,apple2)
 apple_music = unique(apple_music)
 ```
 
-# Обработка Яндекс.Музыки
+# Processing Yandex.Music
 ```{r}
 yandex = yandex[,-1]
 yandex
 
-#  разделитель ; между исполнителями
+#  delimiter ; between performers
 yandex[,1] = str_replace_all(yandex[,1], " & ", "; ")
 yandex[,1] = str_replace_all(yandex[,1], ", ", "; ")
 
-# замена ; во всех дуэтах на &
+# replacement ; in all duets on &
 for (i in seq(from = 1, to = length(duets), by = 1)){
 yandex[,1] = str_replace_all(string = yandex[,1], duets[i], list_of_duets[i])
 }
 ```
 
-# Обработка tophits_months
+# Processing tophits_months
 ```{r}
-# Ищем повторяющиеся значения при условии, что нужно оставить первое значение и убрать все последующие
+# We are looking for duplicate values ​​under the condition that we need to leave the first value and remove all subsequent ones
 keep= NA
 for(g in seq(from = 1, to = nrow(tophits_months), by = 1)){
   keep[g]=!(isTRUE(tophits_months[g,6] %in% c(tophits_months[1:(g-1),6])))
 }
-# Первая строчка всегда обозначается как FALSE, поэтому фиксим
+# The first line is always designated as FALSE, so fix
 keep[1] = TRUE
-# Оставляем только нужные значения в таблице
+# leave only the necessary values ​​in the table
 tophits_months1 = tophits_months[keep,]
 
-# удаляем ненужные колонки в таблице 
+# remove unnecessary columns in the table
 tophits_months1 = tophits_months1[,c(1,6,8,9,11)]
-# переименовываем столбики
+# rename columns
 tophits_months2 = data.frame(
   artist = tophits_months1[,2],
   title = tophits_months1[,2],
@@ -304,12 +304,12 @@ tophits_months2 = data.frame(
   month = tophits_months1[,5],
   year = tophits_months1[,1])
 
-# достаем имена артистов
+# get the names of the artists
 tophits_months2$artist = sub(".*  &", "", tophits_months2$artist) %>%
   str_replace_all("&", "; ") %>% unlist() %>% 
   str_replace_all("feat.", "; ") %>% unlist()
 
-# достаем названия треков
+# get the track names
 tophits_months2$title = sub("(?<=  &).*", "", perl=T, tophits_months2$title) %>% unlist()
 tophits_months2$title = sub("   &", "", perl=T, tophits_months2$title) %>% unlist() 
 tophits_months2$title = sub(" [*]", "", perl=T,tophits_months2$title) %>% unlist()
@@ -318,26 +318,26 @@ write.csv(tophits_months2, "C:/Users/timur/OneDrive/Documents/R Studio Tasks/Д�
        
 tophits_months3 = tophits_months2[,c(1,2)] 
 
-# замена ; во всех дуэтах на &
+# replacement ; in all duets on &
 for (i in seq(from = 1, to = length(duets), by = 1)){
 tophits_months3[,1] = str_replace_all(string = tophits_months3[,1], duets[i], list_of_duets[i])
 }
 ```
 
-# Обработка VK Music
+# Processing VK Music
 ```{r}
-#  разделитель ; между исполнителями
+# delimiter ; between performers
 vk_music[,1] = str_replace_all(vk_music[,1], " & ", "; ")
 vk_music[,1] = str_replace_all(vk_music[,1], " feat. ", "; ")
 vk_music[,1] = str_replace_all(vk_music[,1], ", ", "; ")
 
-# замена ; во всех дуэтах на &
+# replacement ; in all duets on &
 for (i in seq(from = 1, to = length(duets), by = 1)){
 yandex[,1] = str_replace_all(string = yandex[,1], duets[i], list_of_duets[i])
 }
 ```
 
-# Финальный датасет сбор данных
+# Final dataset data collection
 ```{r}
 ds_raw_names = rbind(tophits_months3, yandex, apple_music,vk_music)
 ds_raw_names = unique(ds_raw_names)
@@ -349,7 +349,7 @@ ds_raw_names1 = ds_raw_names[,-1]
 ds_raw_names1[,1] = str_to_lower(ds_raw_names1[,1])
 ```
 
-# Перевод транслитовских имен исполнителей
+# Translation of transliterated performer names
 ```{r}
 artist_list = ds_raw_names1$artist %>% strsplit("; ") %>% unlist() %>% unique()
 artist_listdf = as.data.frame(artist_list) %>% arrange(artist_list)
@@ -444,12 +444,12 @@ ru_names = c("артур пирожков",
             "витя ак",
             "зомб")
 
-# замена всех транслитированных имен
+# replacing all transliterated names
 for (i in seq(from = 1, to = length(ru_names), by = 1)){
 ds_raw_names1[,1] = str_replace_all(string = ds_raw_names1[,1], eng_names[i], ru_names[i])
 }
 
-# ещё один фикс запятых
+# another comma fix
 ds_raw_names1[,1] = str_replace_all(ds_raw_names1[,1], ", ", "; ")
 keep = !(str_detect(ds_raw_names1[,1],","))
 ds_raw_names1 = ds_raw_names1[keep,]
@@ -457,7 +457,7 @@ ds_raw_names1 = ds_raw_names1[keep,]
 ds_raw_names1 = unique(ds_raw_names1)
 ```
 
-# Прочие чистки
+# Other cleanings
 ```{r}
 rownames(ds_raw_names1) = NULL
 ds_raw_names1[,2] = str_to_lower(ds_raw_names1[,2])
@@ -487,13 +487,13 @@ ds_raw_names3[870,2] = "годы неправды (bonus track)"
 ds_raw_names3[870,3] = "баста, рем дигга & белый будда"
 ds_raw_names3[749,3] = NA
 
-#  разделитель ; между исполнителями
+#  delimiter ; between performers
 ds_raw_names3[,3] = str_replace_all(ds_raw_names3[,3], " & ", "; ")
 ds_raw_names3[,3] = str_replace_all(ds_raw_names3[,3], ", ", "; ")
 ds_raw_names3 = ds_raw_names3[c(-1196,-1184), ]
 rownames(ds_raw_names3) = NULL
 
-# объединить все эти невключенные фиты с первым столбцом
+# combine all these unincluded features with the first column
 ds_raw_names4 = ds_raw_names3
 for (i in seq(from = 1, to = nrow(ds_raw_names4), by = 1)){
   if(is.na(ds_raw_names4[i,3])==F){
