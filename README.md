@@ -19,7 +19,7 @@ You can find all of the important information about me in my [CV](https://drive.
 | [MDS: Region Hapiness<br>Homogenity](https://github.com/tim-toothed/Portfolio_Projects/tree/b08b076cc87508f48e0e0ff10028139cb69bdf77/R/MDS-Happiness) | R | `Multidimensional scaling`, <br>`plotly`, `Short Project` | [RPubs](https://rpubs.com/tim_toothed/mds_happiness) |
 | [How to choose Beer<br>with MDS](https://github.com/tim-toothed/Portfolio_Projects/tree/b08b076cc87508f48e0e0ff10028139cb69bdf77/R/MDS-Beer) | R | `Multidimensional scaling`,<br> `Short Project`, `FUN` | [RPubs](https://rpubs.com/tim_toothed/1121367) |
 | [EFA: What influences love at first sight?](https://github.com/tim-toothed/Portfolio_Projects/tree/b08b076cc87508f48e0e0ff10028139cb69bdf77/R/EFA_Speed_Dating) | R | `Explanatory Factor Analysis`,<br>`Advanced Analysis` | [RPubs](https://rpubs.com/tim_toothed/1123186) |
-| [CA: Student’s<br>Math Scores](https://github.com/tim-toothed/Portfolio_Projects/tree/b08b076cc87508f48e0e0ff10028139cb69bdf77/R/CA-Students_Math_Score) | R | `Correspondence Analysis`,<br> `Short Project`| [RPubps](https://rpubs.com/tim_toothed/1122900) |
+| [CA: Student’s<br>Math Scores](https://github.com/tim-toothed/Portfolio_Projects/tree/b08b076cc87508f48e0e0ff10028139cb69bdf77/R/CA-Students_Math_Score) | R | `Correspondence Analysis`,<br> `Short Project`| [RPubs](https://rpubs.com/tim_toothed/1122900) |
 
 ## Bachelor Thesis
 
