@@ -1,0 +1,299 @@
+---
+title: "21 Hypothesis 2_with_log_reg"
+author: "Timur Sharifullin"
+date: "2023-04-26"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(see)
+library(mgcv)
+```
+
+
+```{r}
+final_df = read.csv("absolute_final_df.csv")
+
+final_df1 = final_df[,-c(2,4,5,13,14)]
+final_df1$X = factor(final_df1$X, levels = c("none","hit"))
+
+final_df1 = final_df1[!duplicated(final_df1[,1]),] %>% select(-track_id)
+
+head(final_df1)
+
+#final_df1_copy = final_df1
+```
+
+
+```{r}
+colnames(final_df1)
+```
+
+# Desriptive Statistics
+
+```{r}
+summary(final_df1$X)
+```
+
+```{r}
+p1 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,2],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[i]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p2 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,3],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[i]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p3 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,4],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[4]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p4 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[, 5],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[5]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p5 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,6],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[6]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p6 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,7],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[7]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p7 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,8],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[8]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+
+grid.arrange(p1,p2,p3,
+             p4,p5,p6,
+             p7,
+             left = "Count", bottom = "Audio Feature Dissimilarity")
+```
+
+# Outliers
+
+```{r}
+#final_df1 = final_df1_copy
+
+# Drums_Energy
+vec = final_df1$Drums_Energy %in% boxplot.stats(final_df1$Drums_Energy)$out
+final_df1 = final_df1[!vec,]
+
+# Drums_Complexity
+vec = final_df1$Drums_Complexity %in% boxplot.stats(final_df1$Drums_Complexity)$out
+final_df1 = final_df1[!vec,]
+
+# Variety_of_musical_instruments
+vec = final_df1$Variety_of_musical_instruments %in%
+  boxplot.stats(final_df1$Variety_of_musical_instruments)$out
+final_df1 = final_df1[!vec,]
+
+# Mixing_Quality
+vec = final_df1$Mixing_Quality %in% boxplot.stats(final_df1$Mixing_Quality)$out
+final_df1 = final_df1[!vec,]
+
+# Harmonic_Richness
+vec = final_df1$Harmonic_Richness %in% boxplot.stats(final_df1$Harmonic_Richness)$out
+final_df1 = final_df1[!vec,]
+
+# Mixing_Character
+vec = final_df1$Mixing_Character %in% boxplot.stats(final_df1$Mixing_Character)$out
+final_df1 = final_df1[!vec,]
+
+# Emotional_Intensity
+vec = final_df1$Emotional_Intensity %in% boxplot.stats(final_df1$Emotional_Intensity)$out
+final_df1 = final_df1[!vec,]
+```
+
+
+```{r}
+p1 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,2],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[i]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p2 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,3],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[i]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p3 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,4],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[4]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p4 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[, 5],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[5]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p5 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,6],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[6]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p6 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,7],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[7]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+p7 = ggplot(data = final_df1) +
+      geom_histogram(aes(x = final_df1[,8],fill = X), bins=1000) +
+      labs(x = colnames(final_df1)[8]) +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+
+
+grid.arrange(p1,p2,p3,
+             p4,p5,p6,
+             p7,
+             left = "Count", bottom = "Audio Feature Similarity")
+```
+
+# Sample Size
+```{r}
+nrow(final_df1)
+summary(final_df1$X)
+```
+
+# Correlation plot
+
+```{r}
+library(ggcorrplot)
+corr_matrix = cor(final_df1[,2:8], method = "pearson")
+cp = ggcorrplot(corr_matrix,hc.order = TRUE, outline.col = "black",lab = TRUE, type = "lower",show.legend = F)
+cp
+
+```
+
+
+# Univariates Analysis
+
+```{r}
+colnames(final_df1)[1] = "Song_Success"
+u1 = gam(Song_Success~s(Drums_Energy),data = final_df1, family = binomial)
+u2 = gam(Song_Success~s(Drums_Complexity),data = final_df1, family = binomial)
+u3 = gam(Song_Success~s(Variety_of_musical_instruments),data = final_df1, family = binomial)
+
+u4 = gam(Song_Success~s(Mixing_Quality),data = final_df1, family = binomial)
+u5 = gam(Song_Success~s(Harmonic_Richness),data = final_df1, family = binomial)
+u6 = gam(Song_Success~s(Mixing_Character),data = final_df1, family = binomial)
+
+u7 = gam(Song_Success~s(Emotional_Intensity),data = final_df1, family = binomial)
+
+#drum_character
+summary(u1)$s.pv 
+plot(ggeffects::ggpredict(u1))
+
+#drum_complexity
+summary(u2)$s.pv
+plot(ggeffects::ggpredict(u2))
+
+#number_of_instruments
+summary(u3)$s.pv
+plot(ggeffects::ggpredict(u3))
+
+#mixing_quality
+summary(u4)$s.pv 
+plot(ggeffects::ggpredict(u4))
+
+#harmonic_richness
+summary(u5)$s.pv
+plot(ggeffects::ggpredict(u5))
+
+#mixing_character
+summary(u6)$s.pv
+plot(ggeffects::ggpredict(u6))
+
+#emotional_character
+summary(u7)$s.pv
+plot(ggeffects::ggpredict(u7))
+```
+
+# Full GAM Model
+
+```{r}
+gam_full = gam(Song_Success~s(Drums_Energy) +
+                  s(Variety_of_musical_instruments) +
+                  s(Harmonic_Richness),
+                data = final_df1,
+                family = binomial)
+
+summary(gam_full)
+plot(ggpredict(gam_full))
+```
+
+
+
+```{r}
+gam.check(gam_full)
+```
+
+
+
+```{r}
+# Splitting the data
+set.seed(1)
+
+# using 70% of ds as training set and 30% as test set
+sample = sample(c(TRUE, FALSE), nrow(final_df1), replace=TRUE, prob=c(0.7,0.3))
+train  = final_df1[sample, ]
+test   = final_df1[!sample, ]
+
+# Creating ROC Curve Plot
+
+# GLM
+
+gam_full1 = gam(Song_Success~ s(Drums_Energy) +
+                  s(Variety_of_musical_instruments) +
+                  s(Harmonic_Richness),
+                data = train,
+                family = binomial)
+
+test_prob = predict(gam_full1, newdata = test, type = "response")
+
+
+library(pROC)
+test_roc = roc(test$Song_Success ~ test_prob, plot = TRUE, print.auc = TRUE)
+
+print(paste("GLM Area Under Curve:",test_roc$auc))
+```
+

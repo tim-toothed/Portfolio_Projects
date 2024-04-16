@@ -1,0 +1,531 @@
+---
+title: "Untitled"
+author: "Timur Sharifullin"
+date: '2022-10-27'
+output: html_document
+---
+
+# Libraries
+```{r setup, include=FALSE}
+library(tidyverse)
+library(RSelenium)
+library(netstat)
+library(stringr)
+library(dplyr)
+library(vkR)
+library(XML)
+library(plotly)
+library(rapportools)
+library(beepr)
+library(seleniumPipes)
+```
+
+# RSelenium Server
+```{r}
+library(RSelenium)
+# start the server
+rs_driver_object <- rsDriver(browser = 'chrome',
+                             chromever = '106.0.5249.21',
+                             verbose = FALSE,
+                             port = free_port())
+
+
+
+## create a client object
+remDr <- rs_driver_object$client
+
+remDr$maxWindowSize()
+```
+
+# Adblock
+```{r}
+remDr$navigate("https://chrome.google.com/webstore/detail/adblock-%E2%80%94-best-ad-blocker/gighmmpiobklfepjocnamgkkbiglidom")
+Sys.sleep(1)
+remDr$findElement(using = 'xpath', '//div[@class="g-c-R  webstore-test-button-label"]')$clickElement()
+```
+
+# tophits.ru (Russian hits Spotify by month)
+```{r}
+# 1st month
+remDr$navigate("https://tophit.ru/ru/chart/russia_spotify/monthly/2021-01-01/rus/all")
+doc <- htmlParse(remDr$getPageSource("https://tophit.ru/ru/chart/russia_spotify/monthly/2021-01-01/rus/all")[[1]])
+tophits_months = as.data.frame(readHTMLTable(doc,as.data.frame=T,header=TRUE))
+tophits_months[,11] = 1
+tophits_months[,1] = 2021
+
+# loop for 2021
+for(i in seq(from = 1, to = 12, by = 1)){
+  url= paste0("https://tophit.ru/ru/chart/russia_spotify/monthly/2021-",
+              ifelse(nchar(i) == 1, paste0("0",i), i),
+              "-01/rus/all")
+  remDr$navigate(url)
+  doc <- htmlParse(remDr$getPageSource(url)[[1]])
+  tophits_temp = as.data.frame(readHTMLTable(doc,as.data.frame=T,header=TRUE))
+  tophits_temp[,11] = i
+  tophits_temp[,1] = 2021
+  tophits_months = rbind(tophits_months, tophits_temp)
+}
+
+# loop for 2022
+for(i in seq(from = 1, to = 2, by = 1)){
+  url= paste0("https://tophit.ru/ru/chart/russia_spotify/monthly/2022-",paste0("0",i),"-01/rus/all")
+  remDr$navigate(url)
+  doc <- htmlParse(remDr$getPageSource(url)[[1]])
+  tophits_temp = as.data.frame(readHTMLTable(doc,as.data.frame=T,header=TRUE))
+  tophits_temp[,11] = i
+  tophits_temp[,1] = 2022
+  tophits_months = rbind(tophits_months, tophits_temp)
+}
+```
+
+# Yandex Music
+```{r}
+# Create the main dataset
+yandex = data.frame(artist=NA, title=NA)
+yandex = yandex[-1,]
+rownames(yandex) = NULL
+
+for (g in seq(from = 10, to = 12, by = 1)){
+  for (i in seq(from = 9, to = 31, by = 2)){
+    url = paste0("https://web.archive.org/web/2020",
+                ifelse(nchar(g)==1,paste0("0",g),g),
+                ifelse(nchar(i)==1,paste0("0",i),i),
+                "/https://music.yandex.ru/chart")
+    
+    remDr$navigate(url)
+    # get song titles
+    titleym1 = remDr$findElements(using = 'xpath', 
+                                  '//*[contains(concat( " ", @class, " " ), concat( " ", "deco-link_stronger", " " ))]')
+    titleym = lapply(titleym1, function (x) x$getElementText())  %>% unlist()
+    
+    # get artist names
+    artistym1 = remDr$findElements(using = 'xpath', '//span[@class="d-track__artists"]')
+    artistym = lapply(artistym1, function (x) x$getElementText())  %>% unlist()
+    
+    # combine into data.frame
+    yandex_temp = data.frame(artist = artistym, title = titleym)
+    
+    # add to main dataset
+    yandex = rbind(yandex, yandex_temp)
+    yandex = unique(yandex)
+  }
+}
+
+write.csv(yandex, "C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/yandex_scraping.csv")
+yandex = read.csv("C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/yandex_scraping.csv")
+```
+
+# Чарт Apple Music до 21 октября 2020
+```{r}
+# Create main table
+
+
+# before Oct 21, 2020
+for (g in seq(from = 10, to = 12, by = 1)){
+  for (i in seq(from = 12, to = 31, by = 2)){
+    url = paste0("https://web.archive.org/web/2020",
+                ifelse(nchar(g)==1,paste0("0",g),g),
+                ifelse(nchar(i)==1,paste0("0",i),i),
+                "/https://music.apple.com/us/playlist/top-100-russia/pl.728bd30a9247487c80a483f4168a9dcd")
+    
+    remDr$navigate(url)
+    # get a list of song titles
+    titleapple1 = remDr$findElements(using = 'xpath', 
+                                  '//*[contains(concat( " ", @class, " " ), concat( " ", "typography-label", " " ))]')
+    titleapple = lapply(titleapple1, function (x) x$getElementText())  %>% unlist()
+    if(titleapple[1]=="Try Beta"){titleapple=titleapple[-1]}
+    if("BALENCIAGA" %in% titleapple){titleapple=titleapple[! titleapple %in% "BALENCIAGA"]}
+    
+    # get a list of artist names
+    artistapple1 = remDr$findElements(using = 'xpath', 
+                                   '//*[contains(concat( " ", @class, " " ), concat( " ", "by-line", " " ))]//*[contains(concat( " ", @class, " " ), concat( " ", "dt-link-to", " " ))]')
+    artistapple = lapply(artistapple1, function (x) x$getElementText())  %>% unlist()
+    
+    # merge into temporary table
+    apple_temp = data.frame(artist = artistapple, title = titleapple)
+    
+    # add to main table
+    apple = rbind(apple, apple_temp)
+    apple = unique(apple)
+  }
+}
+```
+
+# Apple Music Chart after October 21, 2020
+```{r}
+#apple1 = data.frame(artist=NA, title=NA)
+#apple1 = apple1[-1,]
+
+
+for (g in seq(from = 5, to = 5, by = 1)){
+  for (i in seq(from = 1, to = 31, by = 2)){
+    url = paste0("https://web.archive.org/web/2021",
+                ifelse(nchar(g)==1,paste0("0",g),g),
+                ifelse(nchar(i)==1,paste0("0",i),i),
+                "/https://music.apple.com/us/playlist/top-100-russia/pl.728bd30a9247487c80a483f4168a9dcd")
+    
+    remDr$navigate(url)
+    # get a list of song titles
+    titleapple1 = remDr$findElements(using = 'xpath', 
+                                  '//div[@class="songs-list__col songs-list__col--song typography-body"]')
+    titleapple = lapply(titleapple1, function (x) x$getElementText())  %>% unlist()
+    if(titleapple[1]=="Try Beta"){titleapple=titleapple[-1]}
+    if("BALENCIAGA" %in% titleapple){titleapple=titleapple[! titleapple %in% "BALENCIAGA"]}
+    if("It's Beginning to Look a Lot Like Christmas" %in% titleapple){titleapple=titleapple[! titleapple %in% "It's Beginning to Look a Lot Like Christmas"]}
+    
+    # get a list of artist names
+    artistapple1 = remDr$findElements(using = 'xpath', 
+                                   '//div[@class="songs-list__col songs-list__col--artist typography-body"]')
+    artistapple = lapply(artistapple1, function (x) x$getElementText())  %>% unlist()
+    
+    # merge into temporary table
+    apple_temp = data.frame(artist = artistapple, title = titleapple)
+    
+    # add to main table
+    apple1 = rbind(apple1, apple_temp)
+    apple1 = unique(apple1)
+  }
+}
+```
+
+```{r}
+write.csv(apple, "C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/apple_do_21_scraping.csv")
+apple = read.csv("C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/apple_do_21_scraping.csv")
+
+write.csv(apple1, "C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/apple_posle_21_scraping.csv")
+```
+
+# Песни года VK Music
+```{r}
+# 2020 год
+remDr$navigate("https://vk.com/music/playlist/-147845620_2262")
+artistvk1 = remDr$findElements(using = 'xpath', '//div[@class="audio_row__performers"]')
+artistvk = lapply(artistvk1, function (x) x$getElementText())  %>% unlist()
+
+titlevk1 = remDr$findElements(using = 'xpath', 
+                               '//*[contains(concat( " ", @class, " " ), concat( " ", "_audio_row__title_inner", " " ))]')
+titlevk = lapply(titlevk1, function (x) x$getElementText())  %>% unlist()
+vk_2020 = data.frame(artist = artistvk, title = titlevk)
+
+# 2021 год
+remDr$navigate("https://vk.com/music/playlist/-147845620_2460")
+artistvk1 = remDr$findElements(using = 'xpath', '//div[@class="audio_row__performers"]')
+artistvk = lapply(artistvk1, function (x) x$getElementText())  %>% unlist()
+
+titlevk1 = remDr$findElements(using = 'xpath', 
+                               '//*[contains(concat( " ", @class, " " ), concat( " ", "_audio_row__title_inner", " " ))]')
+titlevk = lapply(titlevk1, function (x) x$getElementText())  %>% unlist()
+vk_2021 = data.frame(artist = artistvk, title = titlevk)
+
+# Объединить таблицы
+vk_music = rbind(vk_2020,vk_2021)
+```
+
+
+# Обработка Apple Music после 21
+```{r}
+apple2 = apple1 %>% mutate(is_and = str_detect(apple1$artist,"&")) 
+apple2 %>% arrange(is_and, artist)
+
+apple2[,2] = gsub(apple2[,2],pattern = "[\r\n].*",replacement = "")
+apple2 = unique(apple2)
+
+apple2 = apple2 %>% mutate_all(na_if,"") %>% mutate_all(na_if," ") %>% na.omit()
+rownames(apple2) = NULL
+apple2 = apple2 %>% arrange(-is_and, artist)
+
+# список дуэтов
+list_of_duets = filter(apple2, is_and==T)
+list_of_duets = list_of_duets[,1]
+list_of_duets = strsplit(list_of_duets, ", ") %>% unlist() %>% unique()
+keep = str_detect(list_of_duets,"&")
+list_of_duets = list_of_duets[keep]
+duets = str_replace_all(list_of_duets,  " & ", "; ")
+
+# разделитель ; между исполнителями
+apple2[,1] = str_replace_all(apple2[,1], ", ", "; ")
+apple2 = apple2[,-3]
+```
+
+# Обработка Apple Music до 21
+```{r}
+# удаление лишнего столбца
+apple = apple[,-1]
+apple3 = apple 
+
+#  разделитель ; между исполнителями
+apple3[,1] = str_replace_all(apple[,1], " & ", "; ")
+
+# замена ; во всех дуэтах на &
+for (i in seq(from = 1, to = length(duets), by = 1)){
+apple3[,1] = str_replace_all(string = apple3[,1], duets[i], list_of_duets[i])
+}
+
+# Совмещение таблиц по Apple Music
+apple_music = rbind(apple3,apple2)
+apple_music = unique(apple_music)
+```
+
+# Обработка Яндекс.Музыки
+```{r}
+yandex = yandex[,-1]
+yandex
+
+#  разделитель ; между исполнителями
+yandex[,1] = str_replace_all(yandex[,1], " & ", "; ")
+yandex[,1] = str_replace_all(yandex[,1], ", ", "; ")
+
+# замена ; во всех дуэтах на &
+for (i in seq(from = 1, to = length(duets), by = 1)){
+yandex[,1] = str_replace_all(string = yandex[,1], duets[i], list_of_duets[i])
+}
+```
+
+# Обработка tophits_months
+```{r}
+# Ищем повторяющиеся значения при условии, что нужно оставить первое значение и убрать все последующие
+keep= NA
+for(g in seq(from = 1, to = nrow(tophits_months), by = 1)){
+  keep[g]=!(isTRUE(tophits_months[g,6] %in% c(tophits_months[1:(g-1),6])))
+}
+# Первая строчка всегда обозначается как FALSE, поэтому фиксим
+keep[1] = TRUE
+# Оставляем только нужные значения в таблице
+tophits_months1 = tophits_months[keep,]
+
+# удаляем ненужные колонки в таблице 
+tophits_months1 = tophits_months1[,c(1,6,8,9,11)]
+# переименовываем столбики
+tophits_months2 = data.frame(
+  artist = tophits_months1[,2],
+  title = tophits_months1[,2],
+  n_plays_yt = tophits_months1[,3],
+  n_plays_spotify = tophits_months1[,4],
+  month = tophits_months1[,5],
+  year = tophits_months1[,1])
+
+# достаем имена артистов
+tophits_months2$artist = sub(".*  &", "", tophits_months2$artist) %>%
+  str_replace_all("&", "; ") %>% unlist() %>% 
+  str_replace_all("feat.", "; ") %>% unlist()
+
+# достаем названия треков
+tophits_months2$title = sub("(?<=  &).*", "", perl=T, tophits_months2$title) %>% unlist()
+tophits_months2$title = sub("   &", "", perl=T, tophits_months2$title) %>% unlist() 
+tophits_months2$title = sub(" [*]", "", perl=T,tophits_months2$title) %>% unlist()
+
+write.csv(tophits_months2, "C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/tophits_months.csv")
+       
+tophits_months3 = tophits_months2[,c(1,2)] 
+
+# замена ; во всех дуэтах на &
+for (i in seq(from = 1, to = length(duets), by = 1)){
+tophits_months3[,1] = str_replace_all(string = tophits_months3[,1], duets[i], list_of_duets[i])
+}
+```
+
+# Обработка VK Music
+```{r}
+#  разделитель ; между исполнителями
+vk_music[,1] = str_replace_all(vk_music[,1], " & ", "; ")
+vk_music[,1] = str_replace_all(vk_music[,1], " feat. ", "; ")
+vk_music[,1] = str_replace_all(vk_music[,1], ", ", "; ")
+
+# замена ; во всех дуэтах на &
+for (i in seq(from = 1, to = length(duets), by = 1)){
+yandex[,1] = str_replace_all(string = yandex[,1], duets[i], list_of_duets[i])
+}
+```
+
+# Финальный датасет сбор данных
+```{r}
+ds_raw_names = rbind(tophits_months3, yandex, apple_music,vk_music)
+ds_raw_names = unique(ds_raw_names)
+rownames(ds_raw_names) = NULL
+write.csv(ds_raw_names, "C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/ds_raw_names.csv")
+ds_raw_names = read.csv("C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/ds_raw_names.csv")
+
+ds_raw_names1 = ds_raw_names[,-1]
+ds_raw_names1[,1] = str_to_lower(ds_raw_names1[,1])
+```
+
+# Перевод транслитовских имен исполнителей
+```{r}
+artist_list = ds_raw_names1$artist %>% strsplit("; ") %>% unlist() %>% unique()
+artist_listdf = as.data.frame(artist_list) %>% arrange(artist_list)
+artist_listdf = artist_listdf[-c(1:5),1]
+write.csv(artist_listdf, "C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/artist_listdf.csv")
+
+eng_names = c("arthur pirozhkov",
+              "allj",
+              "basta",
+              "dora",
+              "dzharo & khanza",
+              "egor kreed",
+              "elena temnikova",
+              "elka",
+              "geegun",
+              "guf",
+              "haski",
+              "kasta",
+              "khleb",
+              "kino",
+              "klava koka",
+              "korol i shut",
+              "krovostok",
+              "kucher",
+              "lesha svik",
+              "lsp",
+              "mari kraymbreri",
+              "max barskih",
+              "max korzh",
+              "mikhail shufutinskiy",
+              "misha marvin",
+              "monetochka",
+              "mot",
+              "mumiy troll",
+              "nervy",
+              "nikolay baskov",
+              "nyusha",
+              "oleg kenzov",
+              "olga buzova",
+              "philipp kirkorov",
+              "polina gagarina",
+              "ruki vverkh",
+              "scriptonite",
+              "smoky mo",
+              "timati",
+              "vera brezhneva",
+              "verka serduchka",
+              "vitya ak",
+              "zomb")
+
+ru_names = c("артур пирожков",
+            "элджей",
+            "баста",
+            "дора",
+            "джаро & ханза",
+            "егор крид",
+            "елена темникова",
+            "ёлка",
+            "джиган",
+            "гуф",
+            "хаски",
+            "каста",
+            "хлеб",
+            "кино",
+            "клава кока",
+            "король и шут",
+            "кровосток",
+            "кучер",
+            "лёша свик",
+            "лсп",
+            "мари краймбрери",
+            "макс барских",
+            "макс корж",
+            "михаил шуфутинский",
+            "миша марвин",
+            "монеточка",
+            "мот",
+            "мумий тролль",
+            "нервы",
+            "николай басков",
+            "нюша",
+            "олег кензов",
+            "ольга бузова",
+            "филипп киркоров",
+            "полина гагарина",
+            "руки вверх",
+            "скриптонит",
+            "смоки мо",
+            "тимати",
+            "вера брежнева",
+            "верка сердючка",
+            "витя ак",
+            "зомб")
+
+# замена всех транслитированных имен
+for (i in seq(from = 1, to = length(ru_names), by = 1)){
+ds_raw_names1[,1] = str_replace_all(string = ds_raw_names1[,1], eng_names[i], ru_names[i])
+}
+
+# ещё один фикс запятых
+ds_raw_names1[,1] = str_replace_all(ds_raw_names1[,1], ", ", "; ")
+keep = !(str_detect(ds_raw_names1[,1],","))
+ds_raw_names1 = ds_raw_names1[keep,]
+
+ds_raw_names1 = unique(ds_raw_names1)
+```
+
+# Прочие чистки
+```{r}
+rownames(ds_raw_names1) = NULL
+ds_raw_names1[,2] = str_to_lower(ds_raw_names1[,2])
+ds_raw_names1 = unique(ds_raw_names1)
+
+ds_raw_names2 = ds_raw_names1
+for (i in seq(from = 1, to = nrow(ds_raw_names2), by = 1)){ 
+  if(str_detect(ds_raw_names2[i,2],"feat.")==T){
+    ds_raw_names2[i,3] = str_extract_all(string = ds_raw_names2[i,2],pattern = "feat.*")
+    ds_raw_names2[i,3] = ds_raw_names2[i,3] %>% str_remove_all("feat. ") %>% str_remove_all("[)]") %>% str_remove_all("[]]")
+    ds_raw_names2[i,2] = gsub("\\s*\\([^\\)]+\\)", "", ds_raw_names2[i,2])
+    ds_raw_names2[i,2] =  gsub("\\[|\\]", "", ds_raw_names2[i,2]) 
+    ds_raw_names2[i,2] =  gsub("\\ feat.*", "", ds_raw_names2[i,2])
+  }
+}
+
+ds_raw_names3 = ds_raw_names2
+rownames(ds_raw_names3) = NULL
+ds_raw_names3[721,] = ds_raw_names3[721,] %>% str_remove_all(" новогодняя версия") %>% str_remove_all(" \\[новогодняя версия")
+ds_raw_names3 = ds_raw_names3[-990,]
+rownames(ds_raw_names3) = NULL
+ds_raw_names3[989,2] = "талия (remix by karma)"
+ds_raw_names3[989,3] = "truwer & скриптонит"
+ds_raw_names3[1098,2] = "я делаю шаг (live 2021)"
+ds_raw_names3[1098,3] = "эльдар джарахов"
+ds_raw_names3[870,2] = "годы неправды (bonus track)"
+ds_raw_names3[870,3] = "баста, рем дигга & белый будда"
+ds_raw_names3[749,3] = NA
+
+#  разделитель ; между исполнителями
+ds_raw_names3[,3] = str_replace_all(ds_raw_names3[,3], " & ", "; ")
+ds_raw_names3[,3] = str_replace_all(ds_raw_names3[,3], ", ", "; ")
+ds_raw_names3 = ds_raw_names3[c(-1196,-1184), ]
+rownames(ds_raw_names3) = NULL
+
+# объединить все эти невключенные фиты с первым столбцом
+ds_raw_names4 = ds_raw_names3
+for (i in seq(from = 1, to = nrow(ds_raw_names4), by = 1)){
+  if(is.na(ds_raw_names4[i,3])==F){
+    ds_raw_names4[i,1] = paste(ds_raw_names4[i,1], ds_raw_names4[i,3], sep = "; ")
+  }
+}
+ds_raw_names4 = ds_raw_names4[,-3]
+ds_raw_names4 = unique(ds_raw_names4)
+rownames(ds_raw_names4) = NULL
+ds_raw_names4 = ds_raw_names4[c(-547,-540, -1156, -599, -1160, -513, -393, -43, -42, -422, -1061, -480, -745, -1157, -268, -29,-902,-77,-1166, -654, -656, -81, -1149, -248, -608, -565, -829, -874, -138, -113, -1163, -380, -550, -1140, -256, -651, -1056, -1013, -1162, -972, -757, -699, -151, -498, -1030,-765, -1074), ]
+ds_raw_names5 = ds_raw_names4
+
+```
+
+```{r}
+
+dupl = ds_raw_names5[duplicated(ds_raw_names5[,2]),]
+rownames(ds_raw_names5) = NULL
+ds_raw_names5 = ds_raw_names5[c(-796, -1118, -555,-527, -825), ]
+rownames(ds_raw_names5) = NULL
+
+
+ds_raw_names5[,1] = str_replace_all(string = ds_raw_names5[,1], "artik ;  asti", "artik & asti")
+ds_raw_names5[,1] = str_replace_all(string = ds_raw_names5[,1], "dima bilan", "Дима Билан")
+ds_raw_names5[,1] = str_replace_all(string = ds_raw_names5[,1], "filatov; karas", "filatov & karas")
+ds_raw_names5[,1] = str_replace_all(string = ds_raw_names5[,1], "gruppa pizza", "pizza")
+ds_raw_names5[,1] = str_replace_all(string = ds_raw_names5[,1], "hammali ;  navai", "hammali & navai")
+write.csv(ds_raw_names5, "C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/ds_raw_names5.csv")
+```
+
+
+```{r}
+# terminate the selenium server
+system("taskkill /im java.exe /f")
+```

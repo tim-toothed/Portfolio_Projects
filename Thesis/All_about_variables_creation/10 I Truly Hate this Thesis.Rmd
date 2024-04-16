@@ -1,0 +1,61 @@
+---
+title: "10 I truly hate this thesis"
+author: "Timur Sharifullin"
+date: "2023-03-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+
+library(stringr)
+library(lubridate)
+```
+
+```{r}
+ff802 = read.csv("full_features0802 - full_features0802.csv")
+ff802 = ff802[-1,]
+
+dsm4 = read.csv("ds_music4 - ds_music4.csv")
+dsm4 = dsm4[-1,]
+
+ds = read.csv("audios2017_finall.csv")
+ds[7518,16] = "4brNPQ00Dq9ARy7tMkYO0C"
+ds[38,16] = "2zkl7UtvPvKCV6XFWvkvn8"
+
+ds$album_release_date = ymd(ds$album_release_date)
+ds$album_release_date = if_else(is.na(ds$album_release_date)==T,
+                                          ymd("2017-01-01"),
+                                          ds$album_release_date)
+```
+
+```{r}
+ff802_1 = ff802 %>% select(track.url)
+dsm4_1 = dsm4 %>% select(track_url)
+
+ff802_1 = str_replace_all(ff802_1[,1], "https://open.spotify.com/track/", "")
+dsm4_1 = str_replace_all(dsm4[,1], "https://open.spotify.com/track/", "")
+
+hit_or_none = ds %>% select(X,track_id) %>% unique
+hit_or_none = hit_or_none %>% filter(X == "hit") %>% na.omit() %>% unique
+
+hits = unique(c(ff802_1,dsm4_1,hits2020_2022))
+```
+
+```{r}
+
+for(i in seq(1,nrow(ds),1)){
+  if(ds[i,16] %in% hits & ds[i,6]>=ymd("2020-07-17")){
+    ds[i,4] = "hit"
+  } 
+  
+  if(ds[i,4] !="hit" & ds[i,6]>=ymd("2020-07-17")){
+    ds[i,4] = "none"
+  }
+}
+summary(as.factor(ds$X))
+
+write.csv(ds, "maybe_final1.csv",row.names = F)
+```
+

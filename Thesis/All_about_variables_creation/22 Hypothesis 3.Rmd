@@ -1,0 +1,124 @@
+---
+title: "22 Hypothesis 3"
+author: "Timur Sharifullin"
+date: "2023-04-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(stringr)
+library(dplyr)
+final_df = read.csv("absolute_final_df.csv")
+final_df$X = factor(final_df$X, levels = c("none","hit"))
+
+final_df1 = final_df %>% select(X,is_feat,n_feat)
+
+final_df1
+```
+
+# Hypothesis 2
+
+The likelihood of the song achieving success (becoming a hit) will increase if the song is labeled as a collaboration between multiple artists, with the names of all performers indicated as the song authors.
+
+# Assumptions Of GLM
+
+## Assumption - The response variable is binary
+
+X - hit/none
+
+## Assumption - Sample size must be sufficiently large
+
+```{r}
+final_df333 = final_df1[,c(1,2)]
+final_df333$is_feat = as.factor(final_df333$is_feat)
+
+table(final_df333$is_feat,final_df333$X)
+```
+
+# GLM
+
+```{r}
+hyp1 = glm(X~is_feat,data = final_df333, family = binomial)
+
+summary(hyp1)
+```
+
+
+## Outliers
+
+```{r}
+influencePlot(hyp1, col = "red")
+outlierTest(hyp1)
+```
+
+
+## Updating the model
+
+```{r}
+hyp1fix <- update(hyp1, subset = c(-1,-4,-212,-259, -262))
+
+summary(hyp1fix)
+```
+
+```{r}
+library(sjPlot)
+
+plot_model(hyp1fix, type = "pred", terms = c("is_feat")) +
+  labs(x = "Presence of Guest Performers", y = "Predicted Probability Of Hit")
+```
+
+#-------------------------------------------------------------------------
+
+## Assumption - The response variable is binary
+
+X - hit/none
+
+## Assumption - Sample size must be sufficiently large
+
+```{r}
+final_df334 = final_df1[,c(1,3)]
+table(as.factor(final_df334$n_feat),final_df334$X)
+```
+
+```{r}
+final_df334 = filter(final_df334, n_feat < 5)
+
+table(as.factor(final_df334$n_feat),final_df334$X)
+```
+
+# GLM
+
+```{r}
+final_df334$n_feat = as.numeric(final_df334$n_feat)
+hyp1_1 = glm(X~n_feat,data = final_df334, family = binomial)
+
+summary(hyp1_1)
+```
+
+## Outliers
+
+```{r}
+influencePlot(hyp1_1, col = "red")
+outlierTest(hyp1_1)
+```
+
+
+## Updating the model
+
+```{r}
+hyp1_1fix <- update(hyp1_1, subset = c(-242,-258,-261,-289))
+
+summary(hyp1_1fix)
+```
+
+### Predicted Probabilities
+```{r}
+library(sjPlot)
+
+plot_model(hyp1_1fix, type = "pred", terms = c("n_feat")) + 
+  labs(x = "Number of Guest Performers", y = "Predicted Probability Of Hit")
+```
+
+
+

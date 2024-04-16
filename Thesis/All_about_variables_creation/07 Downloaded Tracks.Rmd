@@ -1,0 +1,141 @@
+---
+title: "07 Downloaded Tracks"
+author: "Timur Sharifullin"
+date: "2023-01-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(spotifyr)
+```
+
+# Загрузка датасета с названиями
+```{r}
+sample_yandex = read.csv("C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/Audio/sample_yandex1.csv")
+```
+
+# Сплитим названия
+```{r}
+df = data.frame(ya_artist = NA, ya_title = NA)
+for(i in seq(from = 1, to = 949, by = 1)){
+  values = str_split(sample_yandex[i,1], " - ")[[1]]
+  values1 = data.frame(ya_artist = values[1], ya_title = values[2])
+  df = rbind(df, values1)
+}
+
+df1 = data.frame(artist = NA, title = NA)
+for(i in seq(from = 1, to = 949, by = 1)){
+  values = str_split(sample_yandex[i,2], " - ")[[1]]
+  values1 = data.frame(artist = values[1], title = values[2])
+  df1 = rbind(df1, values1)
+}
+
+df = df[-1,]
+df1 = df1[-1,]
+
+sample_yandex1 = cbind(df,df1)
+```
+
+# Проверки
+```{r}
+sample_yandex1$true_download = if_else(sample_yandex1$title %in% sample_yandex1$ya_title, TRUE, FALSE) 
+sample_yandex1$false_download = if_else( sample_yandex1$ya_title %in% sample_yandex1$title, TRUE, FALSE) 
+sample_yandex1$false1_download = if_else( sample_yandex1$ya_artist %in% sample_yandex1$artist, TRUE, FALSE) 
+sample_yandex1$true1_download = if_else(sample_yandex1$artist  %in% sample_yandex1$ya_artist, TRUE, FALSE) 
+```
+
+Удалить BALKON - Ведьмы
+Удалить космонавтов нет
+(не подходят по жанру)
+
+# Редактирование сэмпла
+```{r}
+ds_music = read.csv("C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/df_music_new1801.csv")
+
+ds_music = ds_music[c(-236, -64, -87, -239, -248, -503),]
+write.csv(ds_music, file="C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/df_music_new1901.csv", row.names = F)
+```
+
+# Финальная редактура датасета
+
+```{r}
+to_change = data.frame(artist_title = ds_music$artist_title, track.id = ds_music$track.id)
+sample_yandex = read.csv("C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/Audio/yandex_sample2.csv")
+```
+
+# Сплитим названия
+```{r}
+df = data.frame(ya_artist = NA, ya_title = NA)
+for(i in seq(from = 1, to = 943, by = 1)){
+  values = str_split(sample_yandex[i,1], " - ")[[1]]
+  values1 = data.frame(ya_artist = values[1], ya_title = values[2])
+  df = rbind(df, values1)
+}
+
+df1 = data.frame(artist = NA, title = NA)
+for(i in seq(from = 1, to = 943, by = 1)){
+  values = str_split(to_change[i,1], " - ")[[1]]
+  values1 = data.frame(artist = values[1], title = values[2])
+  df1 = rbind(df1, values1)
+}
+
+df = df[-1,]
+df1 = df1[-1,]
+
+sample_yandex1 = cbind(df,df1)
+rownames(sample_yandex1) = NULL
+```
+
+# Приведение названий к общему виду
+```{r}
+sample_yandex1$true_ya_title = sub("\\s*\\(.*\\)", "",sample_yandex1$ya_title)
+sample_yandex1$true_title = sub("\\s*\\(.*\\)", "",sample_yandex1$title)
+sample_yandex1$true_ya_title = sub("\\s*\\[.*\\]", "",sample_yandex1$true_ya_title)
+sample_yandex1$true_title = sub("\\s*\\[.*\\]", "",sample_yandex1$true_title)
+
+sample_yandex1$true_ya_title = sample_yandex1$true_ya_title %>% str_to_lower()
+sample_yandex1$true_title = sample_yandex1$true_title %>% str_to_lower()
+
+sample_yandex1$true_title = sub("[?!*._]", "",sample_yandex1$true_title)
+sample_yandex1$true_ya_title = sub("[?!*._]", "",sample_yandex1$true_ya_title)
+
+sample_yandex1$true_title = sub("ё", "е",sample_yandex1$true_title)
+sample_yandex1$true_ya_title = sub("ё", "е",sample_yandex1$true_ya_title)
+```
+
+# Редактирование некоторых названий
+```{r}
+sample_yandex1[427,5] = sample_yandex1[127,6]
+sample_yandex1[693,5] = sample_yandex1[763,6]
+sample_yandex1[292,5] = sample_yandex1[426,6]
+```
+
+# Проверки
+```{r}
+sample_yandex1$true_download = if_else(sample_yandex1$true_title %in% sample_yandex1$true_ya_title, TRUE, FALSE) 
+sample_yandex1$false_download = if_else( sample_yandex1$true_ya_title %in% sample_yandex1$true_title, TRUE, FALSE)
+```
+
+# Merging tables
+```{r}
+sample_yandex1$file_name = sample_yandex$downloaded
+to_change1 = arrange(data.frame(true_title = sample_yandex1$true_ya_title,
+                                file_name = sample_yandex1$file_name),
+                     true_title)
+ds_music1 = cbind(ds_music,true_title =sample_yandex1$true_title)
+ds_music1 = merge(ds_music1, to_change1, by="true_title")
+write.csv(ds_music1, file="C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/df_music_new2001.csv", row.names = F)
+```
+
+# Таблица артистов
+```{r}
+ds_music1 = read.csv("C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/df_music_new2001.csv")
+artists_df289 = ds_music1$artist.name %>% str_split("; ") %>% unlist() %>% unique() %>% as.data.frame()
+artists_df289 = select(artists_df289, "name"=".")
+write.csv(artists_df289, file="C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/artists_df289.csv", row.names = F)
+```
+
+

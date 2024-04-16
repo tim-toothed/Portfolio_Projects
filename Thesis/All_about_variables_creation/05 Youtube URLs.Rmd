@@ -1,0 +1,219 @@
+---
+title: "05 Youtube Scraping"
+author: "Timur Sharifullin"
+date: '2022-11-03'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(RSelenium)
+library(netstat)
+library(stringr)
+library(dplyr)
+library(vkR)
+library(XML)
+library(plotly)
+library(rapportools)
+library(seleniumPipes)
+library(lubridate)
+library(stringi)
+library(tuber)
+```
+
+# RSelenium Server
+```{r}
+# start the server
+rs_driver_object <- rsDriver(browser = 'chrome',
+                             chromever = '106.0.5249.21',
+                             verbose = FALSE,
+                             port = free_port())
+
+
+
+## create a client object
+remDr <- rs_driver_object$client
+
+remDr$maxWindowSize()
+
+# Adblock
+remDr$navigate("https://chrome.google.com/webstore/detail/adblock-%E2%80%94-best-ad-blocker/gighmmpiobklfepjocnamgkkbiglidom")
+Sys.sleep(1)
+remDr$findElement(using = 'xpath', '//div[@class="g-c-R  webstore-test-button-label"]')$clickElement()
+```
+
+```{r}
+#ds_music3a = arrange(ds_music3a, artist)
+#ds_music3a$yt_video_url1 = NA
+#ds_music3a$yt_official_url2 = NA
+#ds_music3a$yt_auto_url2 = NA
+```
+
+# Редактируем имена исполнителей для поиска
+```{r}
+ds_music3a$artist = ds_music3a$artist %>% 
+  str_replace_all(pattern="Basta", replacement="Баста") %>%
+  str_replace_all(pattern="Erika Lundmoen", replacement="Эрика Лундмоен") %>% 
+  str_replace_all(pattern="Skryptonite", replacement="Скриптонит") %>% 
+  str_replace_all(pattern="Dzharakhov", replacement="Джарахов") %>% 
+  str_replace_all(pattern="Egor Kreed", replacement="Егор Крид") %>% 
+  str_replace_all(pattern="Eldzhey", replacement="Элджей") %>% 
+  str_replace_all(pattern="Geegun", replacement="Джиган") %>% 
+  str_replace_all(pattern="Kravz", replacement="Кравц") %>% 
+  str_replace_all(pattern="Gunwest", replacement="Ганвест") %>% 
+  str_replace_all(pattern="GUF", replacement="Гуф") %>%
+  str_replace_all(pattern="Timati", replacement="Тимати") %>%
+  str_replace_all(pattern="Husky", replacement="Хаски") %>%
+  str_replace_all(pattern="Irina Kairatovna", replacement="Ирина Кайратовна") %>%
+  str_replace_all(pattern="Kasta", replacement="Каста") %>%
+  str_replace_all(pattern="Rem Digga", replacement="Рем Дигга") %>%
+  str_replace_all(pattern="Krovostok", replacement="Кровосток") %>%
+  str_replace_all(pattern="Levan Gorozia", replacement="Леван Горозия") %>%
+  str_replace_all(pattern="LSP", replacement="ЛСП") %>%
+  str_replace_all(pattern="Max Korzh", replacement="Макс Корж") %>%
+  str_replace_all(pattern="Tima Belorusskih", replacement="Тима Белорусских") %>%
+  str_replace_all(pattern="Monetochka", replacement="Монеточка") %>%
+  str_replace_all(pattern="Nurminsky", replacement="Нурминский") %>%
+  str_replace_all(pattern="BILIK", replacement="БИЛИК") %>%
+  str_replace_all(pattern="Smoky Mo", replacement="Смоки Мо") %>%
+  str_replace_all(pattern="HLEB", replacement="ХЛЕБ") %>%
+  str_replace_all(pattern="Vitya AK", replacement="Витя АК") %>%
+  str_replace_all(pattern=";", replacement=",")
+```
+
+# Tool Assistant URL collector (Youtube)
+```{r}
+g=1
+# Создаем запрос
+search_query = paste(ds_music3a[g,1], "-", ds_music3a[g,2]) %>% str_replace_all("\\+", replacement =  "%2B") %>% str_replace_all(" ", replacement = "+") %>% str_replace_all("&", replacement =  "%26") %>% str_replace_all(",", replacement =  "%2C") %>% str_replace_all("\\(", replacement = "%28") %>% str_replace_all("\\)", replacement = "%29") %>% str_replace_all("\\[", replacement =  "%5B") %>% str_replace_all("\\]", replacement = "%5D") %>% str_replace_all("/", replacement = "%2F") %>% str_replace_all("\\|", replacement = "%7C")
+search_url = paste0("https://www.youtube.com/search?q=",search_query)
+# Переходим на страницу поиска
+remDr$navigate(search_url)
+```
+
+```{r}
+# ЕСЛИ КЛИП ИЛИ ЛИРИКС ИЛИ MOOD
+ds_music3a[g,16] = remDr$getCurrentUrl() %>% unlist()
+```
+
+```{r}
+# ЕСЛИ СТАТИЧНАЯ КАРТИНКА НА ОФИЦИАЛЬНОМ КАНАЛЕ
+ds_music3a[g,17] = remDr$getCurrentUrl() %>% unlist()
+```
+
+```{r}
+# ЕСЛИ СТАТИЧНАЯ КАРТИНКА АВТОМАТИЧЕСКИ СОЗДАНО ЮТУБОМ
+ds_music3a[g,18] = remDr$getCurrentUrl() %>% unlist()
+```
+
+```{r}
+# ЕСЛИ ИМЕЕТСЯ ВТОРОЙ КЛИП/ ВТОРОЙ ЛИРИКС И ПР.
+ds_music3a[g,19] = remDr$getCurrentUrl() %>% unlist()
+```
+
+# Automatic URL collector (YT Music)
+```{r}
+for(g in seq(302,418,1)){
+  # Создаем запрос
+  artists = unlist(strsplit(str_to_lower(ds_music3a[g,1]), "; ")) %>% paste(collapse = ", ")
+  name = ds_music3a[g,2]
+  search_query = paste(artists, "-", name) %>% str_replace_all("\\+", replacement =  "%2B") %>% str_replace_all(" ", replacement = "+") %>% str_replace_all("&", replacement =  "%26") %>% str_replace_all(",", replacement =  "%2C") %>% str_replace_all("\\(", replacement = "%28") %>% str_replace_all("\\)", replacement = "%29") %>% str_replace_all("\\[", replacement =  "%5B") %>% str_replace_all("\\]", replacement = "%5D") %>% str_replace_all("/", replacement = "%2F") %>% str_replace_all("\\|", replacement = "%7C")
+  search_url = paste0("https://music.youtube.com/search?q=",search_query)
+  # Переходим на страницу поиска
+  remDr$navigate(search_url)
+  Sys.sleep(1)
+  
+  # Выгружаем название треков, исполнителей и ссылку на видео
+  check1 = remDr$findElements(using = 'xpath', '//*[(@id = "contents")]//*[contains(concat( " ", @class, " " ), concat( " ", "ytmusic-section-list-renderer", " " )) and (((count(preceding-sibling::*) + 1) = 2) and parent::*)]//*[contains(concat( " ", @class, " " ), concat( " ", "title", " " ))]//*[contains(concat( " ", @class, " " ), concat( " ", "yt-formatted-string", " " ))] | //*[contains(concat( " ", @class, " " ), concat( " ", "ytmusic-section-list-renderer", " " )) and (((count(preceding-sibling::*) + 1) = 1) and parent::*)]//*[contains(concat( " ", @class, " " ), concat( " ", "title", " " ))]//*[contains(concat( " ", @class, " " ), concat( " ", "yt-formatted-string", " " ))]')
+  title = lapply(check1, function (x) x$getElementText())  %>% unlist()
+  link = lapply(check1, function (x) x$getElementAttribute("href"))  %>% unlist() %>% str_remove("music.")
+  
+  check2 = remDr$findElements(using = 'xpath', '//*[(@id = "contents")]//*[contains(concat( " ", @class, " " ), concat( " ", "ytmusic-section-list-renderer", " " )) and (((count(preceding-sibling::*) + 1) = 2) and parent::*)]//*[contains(concat( " ", @class, " " ), concat( " ", "flex-column", " " ))]//*[contains(concat( " ", @class, " " ), concat( " ", "yt-formatted-string", " " ))] | //*[contains(concat( " ", @class, " " ), concat( " ", "ytmusic-section-list-renderer", " " )) and (((count(preceding-sibling::*) + 1) = 1) and parent::*)]//*[contains(concat( " ", @class, " " ), concat( " ", "flex-column", " " ))]//*[contains(concat( " ", @class, " " ), concat( " ", "yt-formatted-string", " " ))]')
+  
+  artist = lapply(check2, function (x) x$getElementText())  %>% unlist() %>% paste(collapse = '') 
+  artist1 = str_split(as.character(artist),pattern = "Композиция") %>% unlist() %>% str_extract_all("\\•.*") %>% unlist() %>%
+    str_remove("• ") %>% str_remove_all(" •.*") %>% str_replace_all(" и ",", ")
+  if(length(title)==3){artist1 = artist1[2:4]}
+  temp_table = data.frame(artist1, title, link)
+  for(i in seq(from=1,to=nrow(temp_table),1)){
+    temp_table[i,4] = isTRUE(any(unlist(str_split(temp_table[i,1],", ")) %in% unlist(str_split(ds_music3a[g,1],", ")))==T & temp_table[i,2]==ds_music3a[g,2])
+    if(temp_table[i,4]==TRUE){
+      ds_music3a[g,18] = temp_table[i,3]
+    }
+  }
+}
+```
+
+# Tool Assistant URL collector (YT Music)
+```{r}
+#ds_music3a = ds_music3a %>% arrange(yt_auto_url2,artist)
+
+g = g+1
+# Создаем запрос
+artists = unlist(strsplit(str_to_lower(ds_music3a[g,1]), "; ")) %>% paste(collapse = ", ")
+name = ds_music3a[g,2]
+search_query = paste(artists, "-", name) %>% str_replace_all("\\+", replacement =  "%2B") %>% str_replace_all(" ", replacement = "+") %>% str_replace_all("&", replacement =  "%26") %>% str_replace_all(",", replacement =  "%2C") %>% str_replace_all("\\(", replacement = "%28") %>% str_replace_all("\\)", replacement = "%29") %>% str_replace_all("\\[", replacement =  "%5B") %>% str_replace_all("\\]", replacement = "%5D") %>% str_replace_all("/", replacement = "%2F") %>% str_replace_all("\\|", replacement = "%7C")
+search_url = paste0("https://music.youtube.com/search?q=",search_query)
+# Переходим на страницу поиска
+remDr$navigate(search_url)
+```
+
+```{r}
+ds_music3a[g,18] = "https://music.youtube.com/watch?v=-j7rM-228hk&feature=share" %>% 
+  str_remove("music.") %>% str_remove("&feature=share")
+```
+
+```{r}
+length(na.omit(ds_music3a$yt_video_url1)) # 127 клипов/mood/lyrics
+length(na.omit(ds_music3a$yt_official_url2)) # 224 official audio
+```
+
+```{r}
+ds_music3a %>% write.csv("C:\\Users\\timur\\OneDrive\\Documents\\R Studio Tasks\\ДИПЛОМ\\ds_music4.csv")
+to_download = read.csv("C:\\Users\\timur\\OneDrive\\Documents\\R Studio Tasks\\ДИПЛОМ\\ds_music4.csv")
+```
+
+
+```{r}
+inst_mfcc = 
+  read.csv("C:\\Users\\timur\\OneDrive\\Documents\\R Studio Tasks\\ДИПЛОМ\\Spotify Audio Analysis\\full_sample_original1.csv")
+#inst_mfcc$name = sub("^\\d+_|_(Instrumental)$", "", inst_mfcc$name)
+#inst_mfcc$name = sub("_\\(Instrumental\\)", "", inst_mfcc$name)
+list_names  = str_split(inst_mfcc$name, " - ")
+```
+
+```{r}
+art = data.frame(list_names)
+art = t(art)
+rownames(art) = NULL
+art = as.data.frame(art)
+
+inst_mfcc$artist = art$V1
+inst_mfcc$name = art$V2
+inst_mfcc = select(inst_mfcc, -X)
+full_data = merge(x = to_download, y = inst_mfcc, by = c("name"))
+full_data = rename(full_data, artist = artist.x)
+full_data = select(full_data, -artist.y) 
+```
+
+```{r}
+full_data = select(full_data, -album.album_type, -track_url, -vk_count_audio, -vk_genre, -vk_album_url, -vk_year, -vk_timestamp, -yt_video_url1, -yt_official_url2, -yt_auto_url2, -V19)
+full_data2 = read.csv("C:\\Users\\timur\\OneDrive\\Documents\\R Studio Tasks\\ДИПЛОМ\\Spotify Audio Analysis\\full_data.csv") %>% select(-X)
+full_data_new = rbind(full_data, full_data2)
+write.csv(full_data, "C:\\Users\\timur\\OneDrive\\Documents\\R Studio Tasks\\ДИПЛОМ\\Spotify Audio Analysis\\original_data_new.csv") 
+```
+
+```{r}
+numeric_data <- full_data_new[, sapply(data, is.double)]
+full_data_new
+# Calculate the correlation matrix
+cor_matrix <- cor(numeric_data)
+cor_matrix
+```
+
+
+```{r}
+# terminate the selenium server
+system("taskkill /im java.exe /f")
+```
+

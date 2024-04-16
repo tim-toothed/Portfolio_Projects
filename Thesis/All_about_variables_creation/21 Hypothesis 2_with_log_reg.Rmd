@@ -1,0 +1,411 @@
+---
+title: "21 Hypothesis 2_with_log_reg"
+author: "Timur Sharifullin"
+date: "2023-04-26"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(see)
+```
+
+
+```{r}
+final_df = read.csv("fin_df_distance_year.csv")
+final_df$X = factor(final_df$X, levels = c("none","hit"))
+
+#final_df1 = final_df[,c(5, 21:30)] %>% unique()
+
+final_df1 = final_df[,c(3,5,18, 21:30)]
+
+colnames(final_df1)[4:13] = c("drum_character", "drum_complexity", "number_of_instruments",
+                        "mixing_quality", "harmonic_richness", "REMOVE",
+                        "mixing_character", "emotional_character", "REMOVE",
+                        "REMOVE")
+final_df1 = final_df1[,-c(9,12,13)]
+
+final_df1
+```
+
+# Subsets
+
+```{r}
+set.seed(2023)
+
+ds0 = final_df1 %>% filter(hit_n == 0) %>% select(-hit_n) %>% unique()
+data = as.data.frame(table(ds0$artist_name)) %>% arrange(-Freq) 
+data = data[data$Freq>50,]
+data1 = as.character(data$Var1)
+vec = c()
+for(i in seq(1,nrow(ds0),1)){
+  if(as.character(ds0$artist_name[i]) %in% data1){
+    vec = append(vec,i)
+  }
+}
+
+ds0 = ds0[-vec,]
+
+
+ds1 = final_df1 %>% filter(hit_n == 1) %>% select(-hit_n) %>% unique()
+data = as.data.frame(table(ds1$artist_name)) %>% arrange(-Freq)
+data = data[data$Freq==0 | data$Freq>50,]
+data1 = as.character(data$Var1)
+vec = c()
+for(i in seq(1,nrow(ds1),1)){
+  if(as.character(ds1$artist_name[i]) %in% data1){
+    vec = append(vec,i)
+  }
+}
+
+ds1 = ds1[-vec,]
+
+ds2 = final_df1 %>% filter(hit_n == 2) %>% select(-hit_n) %>% unique()
+data = as.data.frame(table(ds2$artist_name)) %>% arrange(-Freq) 
+data = data[data$Freq==0 | data$Freq>50,]
+data1 = as.character(data$Var1)
+vec = c()
+for(i in seq(1,nrow(ds2),1)){
+  if(as.character(ds2$artist_name[i]) %in% data1){
+    vec = append(vec,i)
+  }
+}
+
+ds2 = ds2[-vec,]
+
+ds3 = final_df1 %>% filter(hit_n == 3) %>% select(-hit_n) %>% unique()
+data = as.data.frame(table(ds3$artist_name)) %>% arrange(-Freq)
+data = data[data$Freq==0 | data$Freq>50,]
+data1 = as.character(data$Var1)
+vec = c()
+for(i in seq(1,nrow(ds3),1)){
+  if(as.character(ds3$artist_name[i]) %in% data1){
+    vec = append(vec,i)
+  }
+}
+
+ds3 = ds3[-vec,]
+
+ds4 = final_df1 %>% filter(hit_n == 4) %>% select(-hit_n) %>% unique()
+data = as.data.frame(table(ds4$artist_name)) %>% arrange(-Freq)
+data = data[data$Freq==0 | data$Freq>50,]
+data1 = as.character(data$Var1)
+vec = c()
+for(i in seq(1,nrow(ds4),1)){
+  if(as.character(ds4$artist_name[i]) %in% data1){
+    vec = append(vec,i)
+  }
+}
+
+ds4 = ds4[-vec,]
+
+ds5 = final_df1 %>% filter(hit_n == 5) %>% select(-hit_n) %>% unique()
+data = as.data.frame(table(ds5$artist_name)) %>% arrange(-Freq)
+data = data[data$Freq==0 | data$Freq>50,]
+data1 = as.character(data$Var1)
+vec = c()
+for(i in seq(1,nrow(ds5),1)){
+  if(as.character(ds5$artist_name[i]) %in% data1){
+    vec = append(vec,i)
+  }
+}
+
+
+summary(ds0$X)
+summary(ds1$X)
+summary(ds2$X)
+summary(ds3$X)
+summary(ds4$X)
+summary(ds5$X)
+
+ds0 = ds0 %>% dplyr::select(-artist_name)
+ds1 = ds1 %>% dplyr::select(-artist_name)
+ds2 = ds2 %>% dplyr::select(-artist_name)
+ds3 = ds3 %>% dplyr::select(-artist_name)
+ds4 = ds4 %>% dplyr::select(-artist_name)
+ds5 = ds5 %>% dplyr::select(-artist_name)
+```
+
+# Distributions
+
+```{r}
+ds0
+for (i in 2:8) {
+  p =ggplot(data = ds1) +
+    geom_histogram(aes(x = ds1[, i],fill = X), bins=1000) +
+    labs(x = colnames(ds1)[i])
+    
+  # Print each plot
+  print(p)
+}
+```
+
+
+#  Univariates Analysis
+
+## DS0
+```{r}
+library(mgcv)
+u1 = gam(X~s(drum_character),data = ds0, family = binomial)
+u2 = gam(X~s(drum_complexity),data = ds0, family = binomial)
+u3 = gam(X~s(number_of_instruments),data = ds0, family = binomial)
+
+u4 = gam(X~s(mixing_quality),data = ds0, family = binomial)
+u5 = gam(X~s(harmonic_richness),data = ds0, family = binomial)
+u6 = gam(X~s(mixing_character),data = ds0, family = binomial)
+
+u7 = gam(X~s(emotional_character),data = ds0, family = binomial)
+
+
+#drum_character
+summary(u1)$s.pv 
+plot(ggeffects::ggpredict(u1))
+
+#drum_complexity
+summary(u2)$s.pv
+plot(ggeffects::ggpredict(u2))
+
+#number_of_instruments
+summary(u3)$s.pv
+plot(ggeffects::ggpredict(u3))
+
+#mixing_quality
+summary(u4)$s.pv 
+plot(ggeffects::ggpredict(u4))
+
+#harmonic_richness
+summary(u5)$s.pv
+plot(ggeffects::ggpredict(u5))
+
+#mixing_character
+summary(u6)$s.pv
+plot(ggeffects::ggpredict(u6))
+
+#emotional_character
+summary(u7)$s.pv
+plot(ggeffects::ggpredict(u7))
+```
+
+Only mixing_quality is significant - S-Shape
+
+## DS1
+```{r}
+u1 = gam(X~s(drum_character),data = ds1, family = binomial)
+u2 = gam(X~s(drum_complexity),data = ds1, family = binomial)
+u3 = gam(X~s(number_of_instruments),data = ds1, family = binomial)
+
+u4 = gam(X~s(mixing_quality),data = ds1, family = binomial)
+u5 = gam(X~s(harmonic_richness),data = ds1, family = binomial)
+u6 = gam(X~s(mixing_character),data = ds1, family = binomial)
+
+u7 = gam(X~s(emotional_character),data = ds1, family = binomial)
+
+
+#drum_character
+summary(u1)$s.pv 
+plot(ggeffects::ggpredict(u1))
+
+#drum_complexity
+summary(u2)$s.pv
+plot(ggeffects::ggpredict(u2))
+
+#number_of_instruments
+summary(u3)$s.pv
+plot(ggeffects::ggpredict(u3))
+
+#mixing_quality
+summary(u4)$s.pv 
+plot(ggeffects::ggpredict(u4))
+
+#harmonic_richness
+summary(u5)$s.pv
+plot(ggeffects::ggpredict(u5))
+
+#mixing_character
+summary(u6)$s.pv
+plot(ggeffects::ggpredict(u6))
+
+#emotional_character
+summary(u7)$s.pv
+plot(ggeffects::ggpredict(u7))
+```
+
+emotional_character - highly-curved to the end
+
+## DS2
+```{r}
+u1 = gam(X~s(drum_character),data = ds2, family = binomial)
+u2 = gam(X~s(drum_complexity),data = ds2, family = binomial)
+u3 = gam(X~s(number_of_instruments),data = ds2, family = binomial)
+
+u4 = gam(X~s(mixing_quality),data = ds2, family = binomial)
+u5 = gam(X~s(harmonic_richness),data = ds2, family = binomial)
+u6 = gam(X~s(mixing_character),data = ds2, family = binomial)
+
+u7 = gam(X~s(emotional_character),data = ds2, family = binomial)
+
+
+#drum_character
+summary(u1)$s.pv 
+plot(ggeffects::ggpredict(u1))
+
+#drum_complexity
+summary(u2)$s.pv
+plot(ggeffects::ggpredict(u2))
+
+#number_of_instruments
+summary(u3)$s.pv
+plot(ggeffects::ggpredict(u3))
+
+#mixing_quality
+summary(u4)$s.pv 
+plot(ggeffects::ggpredict(u4))
+
+#harmonic_richness
+summary(u5)$s.pv
+plot(ggeffects::ggpredict(u5))
+
+#mixing_character
+summary(u6)$s.pv
+plot(ggeffects::ggpredict(u6))
+
+#emotional_character
+summary(u7)$s.pv
+plot(ggeffects::ggpredict(u7))
+```
+
+## DS3
+```{r}
+u1 = gam(X~s(drum_character),data = ds3, family = binomial)
+u2 = gam(X~s(drum_complexity),data = ds3, family = binomial)
+u3 = gam(X~s(number_of_instruments),data = ds3, family = binomial)
+
+u4 = gam(X~s(mixing_quality),data = ds3, family = binomial)
+u5 = gam(X~s(harmonic_richness),data = ds3, family = binomial)
+u6 = gam(X~s(mixing_character),data = ds3, family = binomial)
+
+u7 = gam(X~s(emotional_character),data = ds3, family = binomial)
+
+
+#drum_character
+summary(u1)$s.pv 
+plot(ggeffects::ggpredict(u1))
+
+#drum_complexity
+summary(u2)$s.pv
+plot(ggeffects::ggpredict(u2))
+
+#number_of_instruments
+summary(u3)$s.pv
+plot(ggeffects::ggpredict(u3))
+
+#mixing_quality
+summary(u4)$s.pv 
+plot(ggeffects::ggpredict(u4))
+
+#harmonic_richness
+summary(u5)$s.pv
+plot(ggeffects::ggpredict(u5))
+
+#mixing_character
+summary(u6)$s.pv
+plot(ggeffects::ggpredict(u6))
+
+#emotional_character
+summary(u7)$s.pv
+plot(ggeffects::ggpredict(u7))
+```
+
+mixing_quality 
+
+emotional_character
+
+## DS4
+```{r}
+u1 = gam(X~s(drum_character),data = ds4, family = binomial)
+u2 = gam(X~s(drum_complexity),data = ds4, family = binomial)
+u3 = gam(X~s(number_of_instruments),data = ds4, family = binomial)
+
+u4 = gam(X~s(mixing_quality),data = ds4, family = binomial)
+u5 = gam(X~s(harmonic_richness),data = ds4, family = binomial)
+u6 = gam(X~s(mixing_character),data = ds4, family = binomial)
+
+u7 = gam(X~s(emotional_character),data = ds4, family = binomial)
+
+
+#drum_character
+summary(u1)$s.pv 
+plot(ggeffects::ggpredict(u1))
+
+#drum_complexity
+summary(u2)$s.pv
+plot(ggeffects::ggpredict(u2))
+
+#number_of_instruments
+summary(u3)$s.pv
+plot(ggeffects::ggpredict(u3))
+
+#mixing_quality
+summary(u4)$s.pv 
+plot(ggeffects::ggpredict(u4))
+
+#harmonic_richness
+summary(u5)$s.pv
+plot(ggeffects::ggpredict(u5))
+
+#mixing_character
+summary(u6)$s.pv
+plot(ggeffects::ggpredict(u6))
+
+#emotional_character
+summary(u7)$s.pv
+plot(ggeffects::ggpredict(u7))
+```
+
+no variables
+
+## DS5
+```{r}
+u1 = gam(X~s(drum_character),data = ds5, family = binomial)
+u2 = gam(X~s(drum_complexity),data = ds5, family = binomial)
+u3 = gam(X~s(number_of_instruments),data = ds5, family = binomial)
+
+u4 = gam(X~s(mixing_quality),data = ds5, family = binomial)
+u5 = gam(X~s(harmonic_richness),data = ds5, family = binomial)
+u6 = gam(X~s(mixing_character),data = ds5, family = binomial)
+
+u7 = gam(X~s(emotional_character),data = ds5, family = binomial)
+
+
+#drum_character
+summary(u1)$s.pv 
+plot(ggeffects::ggpredict(u1))
+
+#drum_complexity
+summary(u2)$s.pv
+plot(ggeffects::ggpredict(u2))
+
+#number_of_instruments
+summary(u3)$s.pv
+plot(ggeffects::ggpredict(u3))
+
+#mixing_quality
+summary(u4)$s.pv 
+plot(ggeffects::ggpredict(u4))
+
+#harmonic_richness
+summary(u5)$s.pv
+plot(ggeffects::ggpredict(u5))
+
+#mixing_character
+summary(u6)$s.pv
+plot(ggeffects::ggpredict(u6))
+
+#emotional_character
+summary(u7)$s.pv
+plot(ggeffects::ggpredict(u7))
+```
+
+drum_complexity - curved downslope

@@ -1,0 +1,284 @@
+---
+title: "04 VK play_count Web Scraping"
+author: "Timur Sharifullin"
+date: '2022-10-31'
+output: html_document
+---
+
+# Библиотеки
+```{r setup, include=FALSE}
+library(tidyverse)
+library(RSelenium)
+library(netstat)
+library(stringr)
+library(dplyr)
+library(vkR)
+library(XML)
+library(plotly)
+library(rapportools)
+library(seleniumPipes)
+library(lubridate)
+library(stringi)
+
+library(spotifyr)
+Sys.setenv(SPOTIFY_CLIENT_ID = '1e1c38c8ccf64465a7490c1698dee485')
+Sys.setenv(SPOTIFY_CLIENT_SECRET = 'aee21b7926b34e31abe811687f431952')
+
+access_token <- get_spotify_access_token()
+```
+
+# RSelenium Server
+```{r}
+# start the server
+rs_driver_object <- rsDriver(browser = 'chrome',
+                             chromever = '106.0.5249.21',
+                             verbose = FALSE,
+                             port = free_port())
+
+
+
+## create a client object
+remDr <- rs_driver_object$client
+
+remDr$maxWindowSize()
+```
+
+# Adblock
+```{r}
+remDr$navigate("https://chrome.google.com/webstore/detail/adblock-%E2%80%94-best-ad-blocker/gighmmpiobklfepjocnamgkkbiglidom")
+Sys.sleep(1)
+remDr$findElement(using = 'xpath', '//div[@class="g-c-R  webstore-test-button-label"]')$clickElement()
+```
+
+# VK Login
+```{r}
+remDr$navigate("https://vk.com")
+remDr$findElement(using = 'xpath', '//button[@class="FlatButton FlatButton--accent-outline FlatButton--size-l FlatButton--wide VkIdForm__button VkIdForm__signInQRButton"]')$clickElement()
+# Отсканировать QR
+```
+
+# Datasets
+```{r}
+ds_music_after_python = read.csv("C:\\Users\\timur\\OneDrive\\Documents\\R Studio Tasks\\ДИПЛОМ\\ds_music_after_python.csv")
+ds_artist_sample = read.csv("C:/Users/timur/OneDrive/Documents/R Studio Tasks/ДИПЛОМ/ds_artist_sample.csv")
+```
+
+# Editing the dataset
+```{r}
+ds_music1 = ds_music_after_python %>% select(artist, name, id, album.release_date, album.album_type, 
+                                             popularity, track_url, play_counts_spotify)
+row.names(ds_music1) = NULL
+
+# deleting duplicate kostromin song and not a russian-language song"2 Phút Hơn - KAIZ Remix"
+ds_music1 = ds_music1[c(-411, -468),]
+row.names(ds_music1) = NULL
+
+# editing bugged play_counts (similar play_count or na)
+## Problems has occurred due to similar names of albums and singles (=best search result is album, not single)
+ds_music1[116,8] = 30044233 # kizaru, BBT - Bandana
+ds_music1[150,8] = 5709753 # Oxxxymiron - Красота и Уродство 
+ds_music1[275,8] = 2209522 # MONEYKEN, INSTASAMKA - ВИТОН 2
+
+## Problems has occurred due to the instable internet connection
+ds_music1[356,8] = 651371 # Dose - Губы
+ds_music1[417,8] = 444355 # Lesha Svik - Не зашьёшь
+ds_music1[525,8] = 1106839 # Timati, DASHXX - Полностью моя
+
+# download result table
+ds_music1 %>% write.csv("C:\\Users\\timur\\OneDrive\\Documents\\R Studio Tasks\\ДИПЛОМ\\ds_music1.csv")
+```
+
+# Сбор Данных VK Music
+## Creating columns for new variables
+```{r}
+ds_music1 = read.csv("C:\\Users\\timur\\OneDrive\\Documents\\R Studio Tasks\\ДИПЛОМ\\ds_music1.csv")
+ds_music1 = ds_music1[,-1]
+ds_music1$vk_play_counts = NA
+ds_music1$vk_album_type = NA
+ds_music1$vk_count_audio = NA
+ds_music1$vk_genre = NA
+ds_music1$vk_album_url = NA
+ds_music1$vk_year = NA
+ds_music1$vk_timestamp = NA
+```
+
+## Auto-Scraper 
+- Набирает запрос в поиске в вк
+- Достает все ссылки на релизы из секции "Альбомы"
+- Достает данные из каждого релиза из секции "Альбомы"
+- Сверяет параметры и достает данные для трека, который был посчитан искомым
+
+Недостатки: примерно 30% треков не получают данные (в основном из-за разницы в языке, на котором указано имя исполнителя, и ошибках поиска сервиса ВК) 
+```{r}
+for(g in seq(from = 1, to = 1, by = 1)){
+  remDr$navigate("https://vk.com/audio")
+  Sys.sleep(1)
+    
+  # Кликаем на строку поиска
+  search_track = remDr$findElement(using = 'xpath', '//*[(@id = "audio_search")]')
+  search_track$clickElement()
+  # Набираем в поиск название трека
+  search_track$sendKeysToElement(list(paste(ds_music1[g,1],ds_music1[g,2]), key = 'enter'))
+  Sys.sleep(3)
+  
+  # Выгружаем ссылки на плейлисты, находящиеся в разделе "Альбомы"
+  albums4 = remDr$findElements(using = 'xpath', 
+                                 '//*[contains(concat( " ", @class, " " ), concat( " ", "audio_pl__type_main_only", " " ))]//*[contains(concat( " ", @class, " " ), concat( " ", "audio_item__title", " " ))]')
+  albums44 = lapply(albums4, function (x) x$getElementAttribute("href"))  %>% unlist()
+  albums5 = remDr$findElements(using = 'xpath', 
+                                 '//*[contains(concat( " ", @class, " " ), concat( " ", "audio_numeric", " " ))]//*[contains(concat( " ", @class, " " ), concat( " ", "audio_item__title", " " ))]')
+  albums55 = lapply(albums5, function (x) x$getElementAttribute("href"))  %>% unlist()
+  albums6 = remDr$findElements(using = 'xpath', 
+                                 '//*[contains(concat( " ", @class, " " ), concat( " ", "audio_pl__type_collection", " " ))]//*[contains(concat( " ", @class, " " ), concat( " ", "audio_item__title", " " ))]')
+  albums66 = lapply(albums6, function (x) x$getElementAttribute("href"))  %>% unlist()
+  albums = c(albums44,albums55,albums66) %>% as.data.frame() %>% unique()
+  
+  if(nrow(albums)!=0){
+    
+     # Создаем новую таблицу под данные из набранных плейлистов
+    album_screen = data.frame(artist = NA, name = NA, year = NA, genre = NA, stats = NA, type = NA, count_audio = NA,
+                              is_year = NA, is_artist = NA, is_name = NA, is_type = NA, sum_true = NA, is_fin = NA)
+    
+    # Запускаем цикл по обработке каждого альбома, находящегося в разделе "Альбомы"
+    for(k in seq(from = 1, to = nrow(albums), by = 1)){
+      ## Нажимаем на плейлист, чтобы он открылся на той же странице, но не включился трек
+      remDr$findElement(using = 'xpath', paste0('//*[contains(concat( " ", @class, " " ), concat( " ", "_audio_pl_',str_sub(albums[k,1],28,-20),'", " " ))]//*[contains(concat( " ", @class, " " ), concat( " ", "audio_pl__cover_stats", " " ))]'))$clickElement()
+      Sys.sleep(1)
+      
+      ## Получаем информацию об исполнителе, названии, жанре, годе релиза, типе релиза, количестве прослушиваний
+      album_artist1 = remDr$findElements(using = 'xpath', '//div[@class="audio_pl_snippet__info_author"]')
+      album_artist = lapply(album_artist1, function (x) x$getElementText())  %>% unlist()
+      
+      album_name1 = remDr$findElements(using = 'xpath', '//div[@class="audio_pl_snippet__info_title_row"]')
+      album_name = lapply(album_name1, function (x) x$getElementText())  %>% unlist()
+      
+      album_info1 = remDr$findElements(using = 'xpath', '//div[@class="audio_pl_snippet__info_line"]')
+      album_info = lapply(album_info1, function (x) x$getElementText())  %>% unlist()
+      album_year = str_replace_all(album_info, "[^0-9]", "") %>% as.numeric()
+      album_genre = str_replace_all(album_info, "[^А-Яа-яЁ-ёA-Za-z]", "")
+      
+      album_stats1 = remDr$findElements(using = 'xpath', '//div[@class="audio_pl_snippet__stats"]')
+      album_stats = lapply(album_stats1, function (x) x$getElementText())  %>% unlist() 
+      album_type = ifelse(str_detect(album_stats, "аудио")==T, "album", "single")
+      album_count_audio = gsub(album_stats, pattern = ".*прослуш", replacement = "") %>% 
+                            str_replace_all("[^0-9]","") %>% as.numeric()
+      album_count_plays = gsub(album_stats, pattern = "прослуш.*", replacement = "") %>% 
+                            str_replace_all("[^0-9]","") %>% as.numeric()
+        
+      # имя артиста
+      album_screen[k,1] = str_to_lower(album_artist)
+      # название альбома
+      album_screen[k,2] = str_to_lower(album_name)
+      # год выпуска
+      album_screen[k,3] = album_year
+      # жанр
+      album_screen[k,4] = album_genre
+      # количество прослушиваний
+      album_screen[k,5] = album_count_plays
+      # альбом или сингл
+      album_screen[k,6] = album_type
+      # количество аудиозаписей в релизе
+      album_screen[k,7] = ifelse(is.na(album_count_audio)==T, 1, album_count_audio)
+      # совпадает ли год (если album_type не совпдает, то год выпуска может отличаться на -2 года максимум)
+      album_screen[k,8] = isTRUE(album_screen[k,3] == as.numeric(str_sub(ds_music1[g,4],0,-7)) | 
+                                   ((album_screen[k,3] == as.numeric(str_sub(ds_music1[g,4],0,-7))-1) & 
+                                      (album_screen[k,6] != ds_music1[g,5])) | 
+                                   ((album_screen[k,3] == as.numeric(str_sub(ds_music1[g,4],0,-7))-2) & 
+                                      (album_screen[k,6] != ds_music1[g,5])))
+      # совпадает ли имя артиста хотя бы с одним именем
+      album_screen[k,9] = any(unlist(strsplit(unlist(strsplit(album_screen[k,1],", "))," feat. ")) %in% 
+                                unlist(strsplit(str_to_lower(ds_music1[g,1]), "; ")))
+      # совпадает ли имя релиза
+      album_screen[k,10] = isTRUE(album_screen[k,2] == str_to_lower(ds_music1[g,2]))
+      # совпадает ли тип релиза
+      album_screen[k,11] = isTRUE(album_screen[k,6] == ds_music1[g,5])
+      # сколько из 4 параметров совпадает
+      album_screen[k,12] = as.numeric(album_screen[k,8])+as.numeric(album_screen[k,9])+
+        as.numeric(album_screen[k,10])+as.numeric(album_screen[k,11])
+      remDr$goBack()
+      Sys.sleep(1)
+    }
+    for(k in seq(from = 1, to = nrow(album_screen), by = 1)){
+      # считать ли трек искомым 
+      album_screen[k,13] = isTRUE(album_screen[k,12]==max(album_screen[,12]) & album_screen[k,8] ==T & album_screen[k,9]==T |
+                                    album_screen[k,12]==max(album_screen[,12]) & album_screen[k,12]==3 & album_screen[k,9]!=T)
+      # если трек считается искомым - выгрузить данные в основную таблицу
+      if(album_screen[k,13]==T){
+
+
+      }
+    }
+  }
+}
+```
+
+## Semi-Auto Scraper (то, что не удалось выгрузить в автоматическом режиме, выгружается в полуавтоматическом режиме)
+Собирает данные из уже открытого плейлиста релиза
+
+То есть вручную нужно забить запрос в поиск и выбрать подходящий релиз для компиляции 
+```{r}
+## Получаем информацию об исполнителе, названии, жанре, годе релиза, типе релиза, количестве прослушиваний
+album_artist1 = remDr$findElements(using = 'xpath', '//div[@class="audio_pl_snippet__info_author"]')
+album_artist = lapply(album_artist1, function (x) x$getElementText())  %>% unlist()
+      
+album_name1 = remDr$findElements(using = 'xpath', '//div[@class="audio_pl_snippet__info_title_row"]')
+album_name = lapply(album_name1, function (x) x$getElementText())  %>% unlist()
+      
+album_url1 = remDr$findElements(using = 'xpath', '//a[@class="audio_pl_snippet__info_title audio_pl__title"]')
+album_url = lapply(album_url1, function (x) x$getElementAttribute("href"))  %>% unlist()
+      
+album_info1 = remDr$findElements(using = 'xpath', '//div[@class="audio_pl_snippet__info_line"]')
+album_info = lapply(album_info1, function (x) x$getElementText())  %>% unlist()
+album_year = str_replace_all(album_info, "[^0-9]", "") %>% as.numeric()
+album_genre = str_replace_all(album_info, "[^А-Яа-яЁ-ёA-Za-z]", "")
+      
+album_stats1 = remDr$findElements(using = 'xpath', '//div[@class="audio_pl_snippet__stats"]')
+album_stats = lapply(album_stats1, function (x) x$getElementText())  %>% unlist() 
+album_type = ifelse(str_detect(album_stats, "аудио")==T, "album", "single")
+album_count_audio = gsub(album_stats, pattern = ".*прослуш", replacement = "") %>% 
+                          str_replace_all("[^0-9]","") %>% as.numeric()
+album_count_plays = gsub(album_stats, pattern = "прослуш.*", replacement = "") %>% 
+                          str_replace_all("[^0-9]","") %>% as.numeric()
+        
+# vk_play_counts
+ds_music2[g,9] = album_count_plays
+# vk_album_type
+ds_music2[g,10] = album_type
+# vk_count_audio
+ds_music2[g,11] = ifelse(is.na(album_count_audio)==T, 1, album_count_audio)
+# vk_genre
+ds_music2[g,12] = album_genre
+# vk_album_url
+ds_music2[g,13] = album_url
+# vk_year
+ds_music2[g,14] = album_year
+# vk_timestamp
+ds_music2[g,15] = as.character(Sys.time())
+g=g+1
+# скопировать запрос в буфер обмена
+write_clip(paste(ds_music2[g,1],ds_music2[g,2]))
+```
+
+# Dataset with no filtration after vk scraping
+```{r}
+ds_music2 %>% write.csv("C:\\Users\\timur\\OneDrive\\Documents\\R Studio Tasks\\ДИПЛОМ\\ds_music1_vk_full.csv")
+
+```
+
+# Dataset Filtration
+```{r}
+ds_music3 = ds_music2 %>% na.omit() 
+ds_music3 = ds_music3 %>%  filter(str_detect(ds_music3[,12], "Рэп|RB|Хипхоп"))
+
+ds_music3 %>% write.csv("C:\\Users\\timur\\OneDrive\\Documents\\R Studio Tasks\\ДИПЛОМ\\ds_music3.csv")
+ds_music3 = arrange(ds_music3, -play_counts_spotify, -vk_play_counts)
+
+unique_artists = length(unique(unlist(strsplit((ds_music3a$artist),", "))))
+summary(as.factor(ds_music3a$vk_album_type))
+```
+
+
+```{r}
+# terminate the selenium server
+system("taskkill /im java.exe /f")
+```

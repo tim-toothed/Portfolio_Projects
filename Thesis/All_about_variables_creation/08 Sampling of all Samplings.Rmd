@@ -1,0 +1,278 @@
+---
+title: "Untitled"
+author: "Timur Sharifullin"
+date: "2023-02-15"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(spotifyr)
+library(stringr)
+Sys.setenv(SPOTIFY_CLIENT_ID = '1e1c38c8ccf64465a7490c1698dee485')
+Sys.setenv(SPOTIFY_CLIENT_SECRET = 'aee21b7926b34e31abe811687f431952')
+
+access_token <- get_spotify_access_token()
+```
+
+```{r}
+artists_df = read.csv("C:\\Users\\timur\\OneDrive\\Documents\\R Studio Tasks\\ДИПЛОМ\\Analysis Part 3\\full_features0802.csv")[,c(36,37)]
+```
+
+```{r}
+artists_df1 = data.frame(name = NA,id = NA)
+
+for(k in seq(1,nrow(artists_df))){
+  name = artists_df$artist.name[k] %>% str_split("; ")
+  id = artists_df$artist.id[k] %>% str_split("; ")
+
+  for(i in seq(1,length(name[[1]]))){
+    row = c(name[[1]][i], id[[1]][i])
+    artists_df1 = rbind(artists_df1,row)
+  }
+} 
+
+artists_df1 = artists_df1[-1,] %>% unique()
+row.names(artists_df1) = NULL
+```
+
+```{r}
+artists_df1[8,1] = "Скриптонит"
+artists_df1[19,1] = "Джарахов"
+artists_df1[21,1] = "Пошлая Молли"
+artists_df1[22,1] = "Элджей"
+artists_df1[43,1] = "Мумий Тролль"
+artists_df1[44,1] = "Егор Крид"
+artists_df1[45,1] = "Тима Белорусских"
+artists_df1[50,1] = "Тимати"
+artists_df1[58,1] = "Джиган"
+artists_df1[59,1] = "Limba"
+artists_df1[61,1] = "Гуф"
+artists_df1[96,1] = "Баста"
+artists_df1[98,1] = "Макс Корж"
+artists_df1[121,1] = "ЛСП"
+artists_df1[130,1] = "Хаски"
+artists_df1[138,1] = "Клава Кока"
+artists_df1[143,1] = "Николай Басков"
+artists_df1[162,1] = "леша свик"
+artists_df1[172,1] = "Руки Вверх!"
+artists_df1[177,1] = "Некоглай"
+artists_df1[182,1] = "Хлеб"
+artists_df1[187,1] = "МУККА"
+artists_df1[189,1] = "Кровосток"
+artists_df1[190,1] = "Мэйби Бэйби"
+artists_df1[194,1] = "Бустер"
+artists_df1[216,1] = "ЛАУД"
+artists_df1[228,1] = "Ганвест"
+artists_df1[254,1] = "Витя АК"
+artists_df1[264,1] = "Нюша"
+artists_df1[282,1] = "Кравц"
+artists_df1[285,1] = "Смоки Мо"
+artists_df1[286,1] = "Монеточка"
+```
+
+```{r}
+add_artst_name = c("Loc-Dog",
+                   "L'One",
+                   "kavabanga Depo kolibri",
+                   "ВесЪ",
+                   "Dina RAF",
+                   "Рем Дигга",
+                   "Белый Будда",
+                   "Леван Горозия",
+                   "Нурминский",
+                   "Райда",
+                   "DAVA",
+                   "SERYOGA",
+                   "Slame",
+                   "Tanir & Tyomcha",
+                   "Sимптом",
+                   "VERBEE",
+                   "Пабло",
+                   "ALEMOND",
+                   "Mr Lambo")
+add_artist_id = c("4y0G11kIVcUrvbJjIeRttg",
+                  "0x9j5hqljRaIIGjDSmsLT0",
+                  "5qr3Q9yXnDkxF3RLs5ZPLn",
+                  "2rwgRDP8L5D5oyWF1RdlIq",
+                  "4u0EUsQXr7vlvj6qeZhgro",
+                  "2R1OELuSJzXjRm8lc8FjPC",
+                  "2Uy9B02QDEeBkZTMZvnBpi",
+                  "2U2n1lZxqr0Zqhhcv7aqO1",
+                  "36pVuMIbDJk9Mpbfr5gHja",
+                  "06j0PdOWS31kMCmfxsCwg9",
+                  "0Ll5YUmSXpy7LVu7wcN0Z5",
+                  "00nBviCFsh0Cpf8zp0sxw3",
+                  "74qY0JQEoMXHHGShaMtB39",
+                  "78bw0aIvuMJSPxeWPYtGNz",
+                  "4bI1b116KZGjJl5Dy7Lsjy",
+                  "279RipTJjZgFKvmekq7OrP",
+                  "0y5FYSXCyECp4g3zYBXQ2f",
+                  "3QTulA1HR97rjuiIc2WZLr",
+                  "0UilEr4Ux3uNvBwoogmZzu")
+
+artists_df1 = rbind(artists_df1, data.frame(name = add_artst_name, id = add_artist_id))
+```
+
+```{r}
+artists_df1 = artists_df1[-c(16, 28, 43, 82, 84, 93, 95, 101, 106, 116,138,142,143,145,152,153,154,155,172,193,200, 205, 206, 210, 212, 218,222,237,251,259, 260, 261, 262, 263, 264,268,271,275,278,284),]
+artists_df1 = artists_df1[-121,]
+artists_df1 = artists_df1[-144,]
+artists_df1 = artists_df1[-167,]
+artists_df1 = artists_df1[-175,]
+artists_df1 = artists_df1[-35,]
+artists_df1 = artists_df1[-215,]
+artists_df1[188,2] = "1F8usyx5PbYGWxf0bwdXwA"
+row.names(artists_df1) = NULL
+```
+
+```{r}
+#all_audios = data.frame(artist_name = NA, track_name = NA, album_release_date = NA, track_number = NA,
+                        #album_name = NA, album_type = NA, explicit = NA, key_name = NA, mode_name = NA, key_mode = NA, 
+                        #artist_id = NA, album_id = NA, track_id = NA)
+```
+
+```{r}
+for(i in seq(240,264)){
+  
+  # Все гостевые треки
+  print(paste(i, "- feat"))
+  audios_feat = try(get_artist_audio_features(artists_df1[i,2],
+                                     authorization = access_token,
+                                     include_groups = c("appears_on")),silent=F)
+  if(class(audios_feat) != 'try-error'){
+    audios_feat = audios_feat %>% 
+      select(artist_name, track_name, album_release_date, track_number,
+           album_name, album_type, explicit, key_name, mode_name, key_mode,
+           artist_id, album_id, track_id)
+  
+    audios_feat = filter(audios_feat, str_detect(str_to_lower(track_name), str_to_lower(artists_df1[i,1])))
+    
+    all_audios = rbind(all_audios, audios_feat)
+    print("OK!")
+  }
+  Sys.sleep(15)  
+  
+  # Все личные треки
+  print(paste(i, "- album  & singles"))
+  audios_al_si = try(get_artist_audio_features(artists_df1[i,2],
+                                     authorization = access_token,
+                                     include_groups = c("single", "album")),silent=F)
+                     
+  if(class(audios_al_si) != 'try-error'){
+    audios_al_si = audios_al_si %>% 
+      select(artist_name, track_name, album_release_date, track_number,
+             album_name, album_type, explicit, key_name, mode_name, key_mode,
+             artist_id, album_id, track_id)
+    
+    all_audios = rbind(all_audios, audios_al_si)
+    print("OK!")
+  }
+    Sys.sleep(15)
+}
+```
+
+```{r}
+write.csv(all_audios, "timati_zhiv_222630_264.csv",row.names=F)
+```
+
+```{r}
+library(stringr)
+audios2017 = all_audios %>% unique() 
+audios2017 = filter(audios2017, str_detect(audios2017$album_release_date, "2017|2018|2019|2020|2021|2022"))
+write.csv(audios2017, "audios2017_final.csv",row.names=F)
+```
+
+## Addition: 2017-2018
+
+```{r}
+artists_plus_df = read.csv("artists_to_add.csv")
+
+all_audios_plus = data.frame(artist_name = NA, track_name = NA, album_release_date = NA, track_number = NA,
+                        album_name = NA, album_type = NA, explicit = NA, key_name = NA, mode_name = NA, key_mode = NA, 
+                        artist_id = NA, album_id = NA, track_id = NA)
+```
+
+```{r}
+for(i in seq(28,32)){
+  
+  # Все гостевые треки
+  print(paste(i, "- feat"))
+  audios_feat = try(get_artist_audio_features(artists_plus_df[i,2],
+                                     authorization = access_token,
+                                     include_groups = c("appears_on")),silent=F)
+  if(class(audios_feat) != 'try-error'){
+    audios_feat = audios_feat %>% 
+      select(artist_name, track_name, album_release_date, track_number,
+           album_name, album_type, explicit, key_name, mode_name, key_mode,
+           artist_id, album_id, track_id)
+  
+    audios_feat = filter(audios_feat, str_detect(str_to_lower(track_name), str_to_lower(artists_plus_df[i,1])))
+    
+    all_audios_plus = rbind(all_audios_plus, audios_feat)
+    print("OK!")
+  }
+  Sys.sleep(20)  
+  
+  # Все личные треки
+  print(paste(i, "- album  & singles"))
+  audios_al_si = try(get_artist_audio_features(artists_plus_df[i,2],
+                                     authorization = access_token,
+                                     include_groups = c("single", "album")),silent=F)
+                     
+  if(class(audios_al_si) != 'try-error'){
+    audios_al_si = audios_al_si %>% 
+      select(artist_name, track_name, album_release_date, track_number,
+             album_name, album_type, explicit, key_name, mode_name, key_mode,
+             artist_id, album_id, track_id)
+    
+    all_audios_plus = rbind(all_audios_plus, audios_al_si)
+    print("OK!")
+  }
+    Sys.sleep(20)
+}
+```
+
+```{r}
+write.csv(all_audios_plus, "all_audios_plus.csv")
+```
+
+```{r}
+library(stringr)
+audios2017_plus = all_audios_plus %>% unique() 
+audios2017_plus = filter(audios2017_plus, str_detect(audios2017_plus$album_release_date, "2017|2018|2019|2020|2021|2022"))
+write.csv(audios2017_plus, "audios2017_plus.csv",row.names=F)
+```
+
+## Combining to the full list of artists with ids
+
+```{r}
+colnames(artists_plus_df) = c("name","id")
+
+artists_full_table = rbind(artists_df1,artists_plus_df)
+row.names(artists_full_table) = NULL
+
+artists_full_table[249,1] = "Rem Digga"
+artists_full_table[251,1] = "Levan Gorozia"
+artists_full_table[252,1] = "Nurminsky"
+artists_full_table[271,1] = "Noggano"
+artists_full_table[274,1] = "Zomb"
+artists_full_table[287,1] = "maslo chernogo tmina"
+artists_full_table[283,1] = "Malbec"
+artists_full_table[276,1] = "Pika"
+artists_full_table[279,1] = "Naitivihod"
+artists_full_table[265,1] = "Scroodgee"
+artists_full_table[275,1] = "Chestnyi"
+row.names(artists_full_table) = NULL
+
+
+artists_full_table = rbind(artists_full_table,c("LIL VAN","7yCz6tKM2eN3NTt8TgVqO4"))
+artists_full_table = rbind(artists_full_table,c("nevroz","6tMQcfyQr03bk9zciP6fxb"))
+
+
+artists_full_table = artists_full_table[-c(187,227),]
+row.names(artists_full_table) = NULL
+write.csv(artists_full_table,"artists_full_table.csv",row.names = F)
+```
+
+

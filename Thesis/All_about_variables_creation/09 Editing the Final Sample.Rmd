@@ -1,0 +1,135 @@
+---
+title: "09 Editing the final Sample"
+author: "Timur Sharifullin"
+date: "2023-03-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(spotifyr)
+library(stringr)
+library(rapportools)
+Sys.setenv(SPOTIFY_CLIENT_ID = 'c7e539f93aeb404eb7ba194496f3c128')
+Sys.setenv(SPOTIFY_CLIENT_SECRET = 'f3833cfae7144de9b3b1f69ec289944c')
+
+access_token <- get_spotify_access_token()
+```
+
+```{r}
+ds = read.csv("audios2017_add_all_artists.csv")
+```
+
+```{r}
+# Some issues with the table and changed names
+ds[,2] = str_replace_all(ds[,2], "Morty Mort", "LIL MORTY")
+
+ds[,2] = str_replace_all(ds[,2], "MiyaGi & Endspiel", "Miyagi & Andy Panda")
+ds[,1] = str_replace_all(ds[,1], "MiyaGi & Endspiel", "Miyagi & Andy Panda")
+
+ds[38,3] = "ЛЕДЯНЫЕ РУКИ"
+ds[38,16] = "2zkl7UtvPvKCV6XFWvkvn8"
+
+#ds = ds[-7518,]
+ds[3185,16] = "3KFMZiONybSg0tJIWS4tee"
+```
+
+```{r}
+# get all the artists on the track
+
+#for(i in seq(14806,14836,1)){
+#  artists_list = get_track(ds[i,16],authorization = access_token)$artists$name 
+#  ds[i,2] = artists_list %>% paste(collapse="; ")
+#  cat(paste(i,"          "),"\r")
+#  if(i%%100==0){
+#    cat(paste("PAUSE"),"\r")
+#    Sys.sleep(60)
+#  }
+#}
+```
+
+```{r}
+write.csv(ds,"temporal_audio2017.csv",row.names = F)
+```
+
+```{r}
+ds = read.csv("temporal_audio2017.csv")
+ds = ds[,-1]
+
+ds_artists = read.csv("artists_full_table.csv")
+
+# hit-none table
+hit_or_none = ds %>% select(X,track_id) %>% unique
+hit_or_none = hit_or_none %>% filter(X != "") %>% na.omit()
+
+ds = ds[,-4]
+```
+
+```{r}
+# create new dataframe
+ds_result = as.data.frame(ds[1,])
+ds_result[1,] = NA
+```
+
+```{r}
+for(i in seq(1,nrow(ds),1)){
+  
+  # check how many artists on the same track are 
+  artists = unlist(str_split(ds[i,2],"; "))
+  
+  ## if there is more than one artist
+  if(length(artists) > 1){
+    
+    # loop through all the artists on the track
+    for(n in seq(1,length(artists))){
+      cat(paste(i,n),"\r")
+      
+      #check which artists exists in the sample 
+      if(artists[n] %in% ds[,1]){
+        
+        # create separate row 
+        artist_row = ds[i,]
+        
+        # change name and id of the artist for that row
+        artist_row[1,1] = artists[n]
+        artist_row[1,13] = ds_artists[which(trimws(str_to_lower(ds_artists[,1])) == trimws(str_to_lower(artists[n]))),2]
+        
+        # add a row to a new table
+        ds_result = rbind(ds_result, artist_row)
+      }
+    }
+  }
+  
+  ## if there is only one artist
+  else{
+    
+    # add a row to a new table
+    ds_result = rbind(ds_result, ds[i,])
+  }
+  
+}
+```
+
+```{r}
+ds_result = ds_result[-1,] %>% unique()
+
+row.names(ds_result) = NULL
+ds_result1 = ds_result %>% mutate(hit = NA)
+
+for(i in seq(1,nrow(ds_result1))){
+  ds_result1$hit[i] = if_else(ds_result1$track_id[i] %in% hit_or_none$track_id, hit_or_none$X[i],NA)
+}
+```
+
+```{r}
+write.csv(ds_result1, "result_audio_2017.csv",row.names = F)
+```
+
+## UNIQUE TRACKS
+
+```{r}
+unique_tracks = ds_result1[!duplicated(ds_result1$track_id),]
+
+write.csv(unique_tracks, "unique_tracks.csv",row.names = F)
+```
+
