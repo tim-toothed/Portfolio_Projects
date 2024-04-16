@@ -1,4 +1,6 @@
 # CA: Student’s Math Scores
+***View in my [RPubs](https://rpubs.com/tim_toothed/1122909) page***
+
 ## tldr
 Clear case of correspondence Analysis in R. 
 
