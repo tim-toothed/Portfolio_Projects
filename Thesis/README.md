@@ -25,34 +25,5 @@ But there is one more folder which is called `WORKING_FILES`. I want to highligh
 For all other files in the folder - ***Abandon all hope, ye who enter here*** because these files may be messy, false, non-working at all, and so on. But I think, this is inevitable if you are really *researching*.
 
 
-## Background
-I had a study project on web-scraping in my uni and therefore decided to follow my passion at the time, so I collected the info on possible success factors. of beatmakers. 
-
-## About Dataset
-**Method of collection**: Web-Scraping (Selenium)  
-**Date of collection**: 2022-10-11 (YYYY-MM-DD)  
-**Source**: https://www.beatstars.com/top-charts   
-**Number of observations:**: 372  
-**Number of variables:** 17
-
-## Variable Description
-author_name - beatmaker, author of the beat  
-place - place of the beat in the chart  
-beat_title - title of the beat  
-beat_like - number of likes on the beat  
-beat_repost - number of reposts on the beat  
-beat_date - release date of the beat  
-beat_bpm - tempo of the the beat  
-beat_key - key or tonality of the beat  
-beat_plays - number of plays  
-beat_title_price -  is price mentioned in the title of the beat  
-beat_title_offer - is special offer mentioned in the title of the beat  
-beat_title_type - is type beat mentioned in the title of the beat  
-MP3 - price of MP3 version of beat  
-WAV - price of WAV version of beat  
-author_followers - number of followers of beatmaker's page  
-author_plays - overall number of plays on betmaker's page  
-author_n_tracks - overall number of beats uploaded by the author to the platform
-
-## Research Project
-Check out my project where I'm trying to figure out the success factors of beats based on this dataset. The results were not very useful, but perhaps this will inspire you to conduct a deeper analysis. Use it for good!
+## Dataset
+[Final dataset is published on Kaggle](https://www.kaggle.com/datasets/timursharifullindata/russian-rap-2017-2022-dataset) (Bronze Medal)
