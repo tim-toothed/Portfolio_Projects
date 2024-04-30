@@ -1,3 +1,6 @@
+Clean Dataset: [Kaggle](https://www.kaggle.com/datasets/timursharifullindata/russian-rap-2017-2022-dataset)   
+Thesis Full Text: [HSE Website](https://spb.hse.ru/en/ba/soc/students/diplomas/835759635)
+
 # Thesis Files
 I worked on this Thesis for a long time and the sample, hypotheses, method of anylysis were changed many times. So, in the main directory `Thesis` you'll see only clear files of Data Analysis.
 
